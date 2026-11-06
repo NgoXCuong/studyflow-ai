@@ -2,7 +2,7 @@ from alembic import context
 
 from app.db.base import Base
 from app.db.connection import get_engine
-from app.models import auth  # noqa: F401
+from app.models import admin, auth, courses, documents, processing  # noqa: F401
 
 config = context.config
 target_metadata = Base.metadata
@@ -16,6 +16,7 @@ def include_object(obj, name, type_, reflected, compare_to):
 def run_migrations(connection):
     context.configure(
         connection=connection,
+        version_table_schema=connection.dialect.default_schema_name,
         target_metadata=target_metadata,
         include_object=include_object,
     )

@@ -25,7 +25,7 @@ _attempts_lock = Lock()
 
 
 def limit_auth_requests(request: Request) -> None:
-    if request.url.path in {"/auth/logout", "/auth/logout-all"}:
+    if request.url.path in {"/api/v1/auth/logout", "/api/v1/auth/logout-all"}:
         return
     # Giới hạn trong một process; không tin X-Forwarded-For từ client.
     key = request.client.host if request.client else "unknown"

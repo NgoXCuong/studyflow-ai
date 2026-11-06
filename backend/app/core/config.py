@@ -1,7 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +33,37 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: SecretStr = SecretStr("")
     mail_from: str = "no-reply@studyflow.local"
+    document_storage_dir: Path = Path(__file__).resolve().parents[2] / "storage" / "documents"
+    document_max_size_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
+    document_max_pages: int = Field(default=500, gt=0)
+    document_storage_backend: Literal["local", "r2"] = "local"
+    document_user_quota_bytes: int = Field(default=1024 * 1024 * 1024, gt=0)
+    document_retention_days: int = Field(default=7, ge=0)
+    r2_account_id: str = ""
+    r2_bucket_name: str = ""
+    r2_access_key_id: SecretStr = SecretStr("")
+    r2_secret_access_key: SecretStr = SecretStr("")
+    embedding_provider: Literal["cohere", "gemini"] = "cohere"
+    cohere_api_key: SecretStr = SecretStr("")
+    cohere_embedding_model: Literal["embed-v5.0-fast", "embed-v5.0-pro"] = "embed-v5.0-fast"
+    gemini_api_key: SecretStr = SecretStr("")
+    gemini_embedding_model: Literal["gemini-embedding-001"] = "gemini-embedding-001"
+    document_chunk_size: int = Field(default=1500, ge=200, le=6000)
+    document_chunk_overlap: int = Field(default=200, ge=0)
+    document_max_chunks: int = Field(default=1000, gt=0)
+    embedding_batch_size: int = Field(default=32, ge=1, le=100)
+    embedding_timeout_seconds: int = Field(default=30, ge=1, le=120)
+    processing_lease_seconds: int = Field(default=300, ge=180)
+
+    @property
+    def embedding_model(self) -> str:
+        return self.cohere_embedding_model if self.embedding_provider == "cohere" else self.gemini_embedding_model
+
+    @model_validator(mode="after")
+    def validate_chunking(self):
+        if self.document_chunk_overlap >= self.document_chunk_size:
+            raise ValueError("DOCUMENT_CHUNK_OVERLAP must be smaller than DOCUMENT_CHUNK_SIZE")
+        return self
 
 
 @lru_cache
