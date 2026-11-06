@@ -1,5 +1,21 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
+import { ArrowDown, ArrowRight, BookOpen, Check, Layers3, ShieldCheck, Users } from "lucide-react";
+import { Brand } from "@/components/brand";
+import { buttonVariants } from "@/components/ui/button";
 
 export default function Home() {
-  redirect("/profile");
+  return <div className="min-h-dvh">
+    <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-6 sm:px-10"><Brand /><nav className="flex items-center gap-2 sm:gap-5" aria-label="Tài khoản"><Link href="/login" className="text-sm font-medium">Đăng nhập</Link><Link href="/register" className={buttonVariants({ size: "lg" })}>Bắt đầu<ArrowRight /></Link></nav></header>
+    <main>
+      <section className="mx-auto grid max-w-7xl items-center gap-14 px-5 pt-14 pb-20 sm:px-10 sm:pt-24 lg:grid-cols-[1.1fr_1fr] lg:gap-20 lg:pb-28">
+        <div><p className="eyebrow mb-6">Không gian học tập có định hướng</p><h1 className="text-5xl leading-[1.12] font-semibold sm:text-6xl xl:text-7xl">Việc học rõ ràng.<br /><span className="text-primary">Tâm trí nhẹ nhàng.</span></h1><p className="mt-7 max-w-lg text-lg leading-relaxed text-muted-foreground">Đặt môn học, chương và chủ đề vào đúng chỗ. Kết nối với lớp học để bắt đầu một hành trình có tổ chức hơn.</p><div className="mt-8 flex flex-wrap gap-3"><Link href="/register" className={buttonVariants({ size: "lg", className: "h-12 px-6" })}>Tạo không gian của bạn<ArrowRight /></Link><Link href="/login" className={buttonVariants({ variant: "outline", size: "lg", className: "h-12 px-6 bg-card" })}>Đã có tài khoản</Link></div><p className="mt-5 flex items-center gap-2 text-sm text-muted-foreground"><Check className="size-4 text-primary" />Dành cho sinh viên và giảng viên</p></div>
+        <div className="relative isolate">
+          <div aria-hidden="true" className="absolute -inset-5 -z-10 rounded-[36px] bg-accent/70 sm:-inset-8" />
+          <div className="overflow-hidden rounded-2xl border bg-card shadow-xl shadow-primary/5"><div className="flex items-center gap-2 border-b px-6 py-4"><span className="size-2 rounded-full bg-primary/35" /><span className="size-2 rounded-full bg-primary/20" /><span className="size-2 rounded-full bg-primary/10" /><span className="ml-auto text-xs text-muted-foreground">Một cách sắp xếp việc học</span></div><div className="p-7 sm:p-9"><span className="text-xs text-muted-foreground uppercase">Bắt đầu từ nền tảng</span><h2 className="mt-2 text-2xl font-semibold">Từng phần nhỏ.<br />Một bức tranh rõ ràng.</h2><div className="mt-7 space-y-3">{[{ icon: BookOpen, step: "01", title: "Môn học", text: "Tập hợp kiến thức theo từng môn." }, { icon: Layers3, step: "02", title: "Chương & chủ đề", text: "Chia nhỏ nội dung để dễ theo dõi." }, { icon: Users, step: "03", title: "Lớp học", text: "Kết nối sinh viên và giảng viên." }].map(({ icon: Icon, step, title, text }) => <div key={step} className="flex items-center gap-4 rounded-xl border bg-background/50 p-4"><span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-primary"><Icon className="size-5" /></span><div><h3 className="font-semibold">{title}</h3><p className="text-sm text-muted-foreground">{text}</p></div><span className="ml-auto font-mono text-xs text-muted-foreground">{step}</span></div>)}</div></div></div>
+        </div>
+      </section>
+      <section className="border-y bg-card"><div className="mx-auto grid max-w-7xl gap-8 px-5 py-12 sm:px-10 md:grid-cols-3">{[{ icon: BookOpen, title: "Chủ động sắp xếp", text: "Tạo môn cá nhân, tổ chức chương và chủ đề theo nhu cầu học của bạn." }, { icon: Users, title: "Học trong kết nối", text: "Tham gia bằng mã lớp; giảng viên quản lý nội dung và thành viên trong cùng không gian." }, { icon: ShieldCheck, title: "Phạm vi luôn rõ ràng", text: "Phân biệt nội dung cá nhân và môn giảng dạy. Thao tác theo đúng vai trò của bạn." }].map(({ icon: Icon, title, text }) => <article key={title}><Icon className="mb-4 size-6 text-primary" /><h2 className="font-semibold">{title}</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p></article>)}</div></section>
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-6 px-5 py-12 sm:px-10"><div><p className="eyebrow">Bắt đầu đơn giản</p><h2 className="mt-2 text-2xl font-semibold">Môn học đầu tiên đang chờ bạn.</h2></div><Link href="/register" className={buttonVariants({ variant: "outline", size: "lg" })}>Tạo tài khoản<ArrowDown className="-rotate-90" /></Link></div>
+    </main><footer className="border-t px-5 py-6 text-center text-xs text-muted-foreground">StudyFlow AI · Học có tổ chức. Tiến bộ từng bước.</footer>
+  </div>;
 }

@@ -1,29 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "StudyFlow AI",
-  description: "Nền tảng hỗ trợ học tập theo tài liệu môn học.",
+  title: { default: "StudyFlow AI — Không gian học tập của bạn", template: "%s | StudyFlow AI" },
+  description: "Sắp xếp môn học, kết nối lớp học và xây dựng nền tảng cho việc học có định hướng.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
-  return (
-    <html
-      lang="vi"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
-    </html>
-  );
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="vi"><body>{children}</body></html>;
 }

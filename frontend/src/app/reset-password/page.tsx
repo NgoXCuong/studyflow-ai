@@ -1,5 +1,2 @@
 import { AuthForm } from "@/components/auth-form";
-
-export default function ResetPasswordPage() {
-  return <AuthForm mode="reset-password" />;
-}
+export default function Page() { return <AuthForm mode="reset-password" />; }
