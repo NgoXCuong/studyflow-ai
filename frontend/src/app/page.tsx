@@ -1,21 +1,66 @@
 import Link from "next/link";
-import { ArrowDown, ArrowRight, BookOpen, Check, Layers3, ShieldCheck, Users } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, Check, FileText, FolderOpen, History, Layers3, MessageCircle, Quote, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { HomeAccount } from "@/components/home-account";
 import { buttonVariants } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import "./home.css";
 
 export default function Home() {
-  return <div className="min-h-dvh">
-    <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-6 sm:px-10"><Brand /><nav className="flex items-center gap-2 sm:gap-5" aria-label="Tài khoản"><Link href="/login" className="text-sm font-medium">Đăng nhập</Link><Link href="/register" className={buttonVariants({ size: "lg" })}>Bắt đầu<ArrowRight /></Link></nav></header>
-    <main>
-      <section className="mx-auto grid max-w-7xl items-center gap-14 px-5 pt-14 pb-20 sm:px-10 sm:pt-24 lg:grid-cols-[1.1fr_1fr] lg:gap-20 lg:pb-28">
-        <div><p className="eyebrow mb-6">Không gian học tập có định hướng</p><h1 className="text-5xl leading-[1.12] font-semibold sm:text-6xl xl:text-7xl">Việc học rõ ràng.<br /><span className="text-primary">Tâm trí nhẹ nhàng.</span></h1><p className="mt-7 max-w-lg text-lg leading-relaxed text-muted-foreground">Đặt môn học, chương và chủ đề vào đúng chỗ. Kết nối với lớp học để bắt đầu một hành trình có tổ chức hơn.</p><div className="mt-8 flex flex-wrap gap-3"><Link href="/register" className={buttonVariants({ size: "lg", className: "h-12 px-6" })}>Tạo không gian của bạn<ArrowRight /></Link><Link href="/login" className={buttonVariants({ variant: "outline", size: "lg", className: "h-12 px-6 bg-card" })}>Đã có tài khoản</Link></div><p className="mt-5 flex items-center gap-2 text-sm text-muted-foreground"><Check className="size-4 text-primary" />Dành cho sinh viên và giảng viên</p></div>
-        <div className="relative isolate">
-          <div aria-hidden="true" className="absolute -inset-5 -z-10 rounded-[36px] bg-accent/70 sm:-inset-8" />
-          <div className="overflow-hidden rounded-2xl border bg-card shadow-xl shadow-primary/5"><div className="flex items-center gap-2 border-b px-6 py-4"><span className="size-2 rounded-full bg-primary/35" /><span className="size-2 rounded-full bg-primary/20" /><span className="size-2 rounded-full bg-primary/10" /><span className="ml-auto text-xs text-muted-foreground">Một cách sắp xếp việc học</span></div><div className="p-7 sm:p-9"><span className="text-xs text-muted-foreground uppercase">Bắt đầu từ nền tảng</span><h2 className="mt-2 text-2xl font-semibold">Từng phần nhỏ.<br />Một bức tranh rõ ràng.</h2><div className="mt-7 space-y-3">{[{ icon: BookOpen, step: "01", title: "Môn học", text: "Tập hợp kiến thức theo từng môn." }, { icon: Layers3, step: "02", title: "Chương & chủ đề", text: "Chia nhỏ nội dung để dễ theo dõi." }, { icon: Users, step: "03", title: "Lớp học", text: "Kết nối sinh viên và giảng viên." }].map(({ icon: Icon, step, title, text }) => <div key={step} className="flex items-center gap-4 rounded-xl border bg-background/50 p-4"><span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-primary"><Icon className="size-5" /></span><div><h3 className="font-semibold">{title}</h3><p className="text-sm text-muted-foreground">{text}</p></div><span className="ml-auto font-mono text-xs text-muted-foreground">{step}</span></div>)}</div></div></div>
+  return <div className="home-page">
+    <a href="#main-content" className="home-skip">Đến nội dung chính</a>
+    <header className="home-header home-container">
+      <Brand />
+      <nav aria-label="Khám phá StudyFlow" className="home-nav"><a href="#how-it-works">Cách học</a><a href="#features">Khám phá</a><a href="#for-you">Dành cho bạn</a></nav>
+      <HomeAccount />
+    </header>
+    <main id="main-content">
+      <section className="home-hero home-container">
+        <div className="home-hero-copy">
+          <Badge variant="outline" className="home-eyebrow-badge"><span className="home-dot" />KHÔNG GIAN HỌC TẬP CỦA BẠN</Badge>
+          <h1>Từng trang nhỏ.<br />Những điều hiểu<br /><span>sâu hơn.</span></h1>
+          <p>Từ tài liệu trên lớp đến câu hỏi của riêng bạn. Sắp xếp kiến thức, hỏi điều chưa rõ và tìm lại nguồn — trong cùng một không gian.</p>
+          <div className="home-hero-actions"><Link href="/register" className={buttonVariants({ className: "home-button home-primary-cta" })}>Tạo không gian học tập<ArrowRight /></Link><a href="#how-it-works" className="home-text-link">Khám phá cách học<ArrowDown className="size-4" /></a></div>
+          <div className="home-hero-note"><span><Check />Học từ tài liệu của bạn</span><span><Check />Trả lời kèm nguồn</span></div>
         </div>
+        <figure className="home-learning-scene">
+          <div className="home-scene-grid" aria-hidden="true" />
+          <figcaption className="home-scene-caption"><span className="home-dot" />MỘT GÓC HỌC TẬP, NHIỀU KẾT NỐI<span className="home-scene-star" aria-hidden="true">✳</span></figcaption>
+          <div className="home-document-sheet">
+            <div className="home-sheet-top"><span className="home-file-icon"><FileText /></span><span>TÀI LIỆU CỦA BẠN</span><span className="home-sheet-mark">PDF</span></div>
+            <h2>Kiến thức bắt đầu<br />từ một trang giấy.</h2>
+            <div className="home-sheet-lines" aria-hidden="true"><i /><i /><i /><i /><i /></div>
+            <div className="home-highlight"><Quote className="size-4" /><span>Đọc để khám phá.<br /><strong>Hỏi để hiểu sâu.</strong></span></div>
+          </div>
+          <div className="home-question-note"><span className="home-note-icon"><MessageCircle className="size-5" /></span><div><span>ĐIỀU BẠN MUỐN HIỂU</span><strong>“Nội dung này có ý nghĩa gì?”</strong></div></div>
+          <div className="home-source-note"><span className="home-source-check"><Check className="size-4" /></span><div><strong>Từ câu hỏi, tìm về nguồn</strong><span>Đối chiếu đoạn văn và trang tài liệu</span></div><ArrowUpRight className="size-4" /></div>
+          <div className="home-scene-footer"><span>TÀI LIỆU</span><span aria-hidden="true">→</span><span>CÂU HỎI</span><span aria-hidden="true">→</span><span>HIỂU BIẾT</span></div>
+        </figure>
       </section>
-      <section className="border-y bg-card"><div className="mx-auto grid max-w-7xl gap-8 px-5 py-12 sm:px-10 md:grid-cols-3">{[{ icon: BookOpen, title: "Chủ động sắp xếp", text: "Tạo môn cá nhân, tổ chức chương và chủ đề theo nhu cầu học của bạn." }, { icon: Users, title: "Học trong kết nối", text: "Tham gia bằng mã lớp; giảng viên quản lý nội dung và thành viên trong cùng không gian." }, { icon: ShieldCheck, title: "Phạm vi luôn rõ ràng", text: "Phân biệt nội dung cá nhân và môn giảng dạy. Thao tác theo đúng vai trò của bạn." }].map(({ icon: Icon, title, text }) => <article key={title}><Icon className="mb-4 size-6 text-primary" /><h2 className="font-semibold">{title}</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p></article>)}</div></section>
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-6 px-5 py-12 sm:px-10"><div><p className="eyebrow">Bắt đầu đơn giản</p><h2 className="mt-2 text-2xl font-semibold">Môn học đầu tiên đang chờ bạn.</h2></div><Link href="/register" className={buttonVariants({ variant: "outline", size: "lg" })}>Tạo tài khoản<ArrowDown className="-rotate-90" /></Link></div>
-    </main><footer className="border-t px-5 py-6 text-center text-xs text-muted-foreground">StudyFlow AI · Học có tổ chức. Tiến bộ từng bước.</footer>
+      <div className="home-principles"><div className="home-container"><span><FolderOpen />Kiến thức có tổ chức</span><span><Quote />Nguồn luôn rõ ràng</span><span><Users />Kết nối cùng lớp học</span><span><ShieldCheck />Phạm vi truy cập riêng</span></div></div>
+      <section id="how-it-works" className="home-section home-container">
+        <div className="home-section-heading"><div><p className="home-kicker">01 / MỘT NHỊP HỌC MỚI</p><h2>Ít loay hoay hơn.<br />Nhiều khoảnh khắc <span>“à, hiểu rồi”.</span></h2></div><p>Không cần bắt đầu với mọi thứ.<br />Chỉ cần một tài liệu và một câu hỏi.</p></div>
+        <ol className="home-steps">{[
+          { number: "01", icon: FileText, title: "Mang tài liệu vào", text: "Tạo môn học, sắp xếp chương và tải lên PDF có văn bản của bạn." },
+          { number: "02", icon: MessageCircle, title: "Hỏi điều còn băn khoăn", text: "Khi tài liệu sẵn sàng, đặt câu hỏi, yêu cầu giải thích hoặc tóm tắt nội dung." },
+          { number: "03", icon: BookOpen, title: "Hiểu và kiểm chứng", text: "Đọc câu trả lời, mở trang nguồn và tiếp tục câu chuyện trong lịch sử hội thoại." },
+        ].map(({ number, icon: Icon, title, text }) => <li key={number}><div className="home-step-top"><span>{number}</span><Icon className="size-6" /></div><h3>{title}</h3><p>{text}</p></li>)}</ol>
+      </section>
+      <section id="features" className="home-features-section"><div className="home-container home-section">
+        <div className="home-section-heading"><div><p className="home-kicker">02 / ĐỂ VIỆC HỌC LIỀN MẠCH</p><h2>Mọi thứ có chỗ.<br /><span>Tâm trí có khoảng trống.</span></h2></div><p>Tài liệu, câu hỏi và lớp học.<br />Kết nối đúng việc bạn đang cần.</p></div>
+        <div className="home-feature-grid">
+          <Card className="home-feature home-feature-main"><span className="home-feature-symbol"><Sparkles /></span><div><p className="home-feature-overline">TRỢ LÝ HỌC THEO TÀI LIỆU</p><h3>Câu trả lời có điểm tựa.</h3><p>Hỏi đáp dựa trên tài liệu đã chọn, kèm đoạn nguồn và số trang để đối chiếu. Khi chưa đủ căn cứ, hệ thống sẽ nói rõ.</p></div><div className="home-feature-source"><Quote className="size-5" /><span>Hiểu câu trả lời.<br /><strong>Biết nơi để kiểm chứng.</strong></span><BookOpen className="ml-auto size-6" /></div><Link href="/register" className="home-feature-link">Bắt đầu từ tài liệu của bạn<ArrowUpRight className="size-4" /></Link></Card>
+          <Card className="home-feature"><span className="home-feature-symbol"><Layers3 /></span><h3>Một môn học.<br />Một không gian rõ ràng.</h3><p>Sắp xếp môn cá nhân, chương và tài liệu theo cách bạn học. Tách biệt nội dung riêng với tài liệu của lớp.</p><div className="home-folder-labels" aria-hidden="true"><span><FolderOpen className="size-4" />Môn học</span><span><FileText className="size-4" />Tài liệu</span></div></Card>
+          <Card className="home-feature home-feature-history"><span className="home-feature-symbol"><History /></span><h3>Đừng để một ý hay<br />trôi mất.</h3><p>Lưu lại hội thoại, hỏi tiếp theo ngữ cảnh và tìm lại câu trả lời cùng nguồn khi cần ôn tập.</p><div className="home-history-line" aria-hidden="true"><span />Đặt câu hỏi<span />Hỏi sâu hơn<span />Xem lại</div></Card>
+        </div>
+      </div></section>
+      <section id="for-you" className="home-section home-container">
+        <div className="home-section-heading"><div><p className="home-kicker">03 / HỌC RIÊNG, KẾT NỐI CHUNG</p><h2>Mỗi vai trò.<br /><span>Một cách đồng hành.</span></h2></div><p>Chủ động trong việc học.<br />Rõ ràng trong việc chia sẻ.</p></div>
+        <div className="home-roles"><article><span className="home-role-label"><BookOpen className="size-4" />DÀNH CHO SINH VIÊN</span><h3>Học theo nhịp của bạn.</h3><p>Giữ tài liệu cá nhân ngăn nắp, tham gia lớp bằng mã và dành thời gian cho những câu hỏi thật sự cần lời giải.</p><Link href="/register" className="home-text-link">Tạo tài khoản sinh viên<ArrowUpRight className="size-4" /></Link></article><article><span className="home-role-label"><Users className="size-4" />DÀNH CHO GIẢNG VIÊN</span><h3>Một lớp học, cùng kết nối.</h3><p>Tổ chức môn và lớp phụ trách, quản lý thành viên, công bố tài liệu đúng lớp để sinh viên có thể tiếp cận.</p><Link href="/login" className="home-text-link">Đăng nhập tài khoản giảng viên<ArrowUpRight className="size-4" /></Link></article></div>
+      </section>
+      <section className="home-container home-last-section"><div className="home-closing"><div><p className="home-kicker">TRANG TIẾP THEO LÀ CỦA BẠN</p><h2>Bắt đầu nhỏ.<br /><span>Hiểu xa hơn.</span></h2><p>Một tài liệu. Một câu hỏi. Một điều mới được hiểu.</p></div><div className="home-closing-actions"><Link href="/register" className={buttonVariants({ className: "home-button home-light-button" })}>Tạo tài khoản<ArrowRight /></Link><Link href="/login">Đã có tài khoản? Đăng nhập<ArrowUpRight className="size-4" /></Link></div></div></section>
+    </main>
+    <footer className="home-footer home-container"><div><Brand /><p>Học có chiều sâu. Tiến xa hơn.</p></div><nav aria-label="Liên kết cuối trang"><a href="#how-it-works">Cách học</a><Link href="/login">Đăng nhập</Link><Link href="/register">Đăng ký</Link></nav><span>Được tạo cho hành trình học của bạn.</span></footer>
   </div>;
 }

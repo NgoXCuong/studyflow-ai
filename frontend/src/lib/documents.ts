@@ -33,8 +33,9 @@ export type DocumentProcessing = {
   error_message: string | null;
 };
 
-export const formatFileSize = (size: number) => size >= 1024 * 1024
-  ? `${(size / (1024 * 1024)).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} MiB`
-  : `${Math.max(1, Math.round(size / 1024))} KiB`;
+export const formatFileSize = (size: number) =>
+  size >= 1024 * 1024
+    ? `${(size / (1024 * 1024)).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} MiB`
+    : `${Math.max(1, Math.round(size / 1024))} KiB`;
 
 export const documentMaxSize = 20 * 1024 * 1024;

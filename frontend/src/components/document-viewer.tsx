@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Download, ExternalLink, FileText, LoaderCircle } from "lucide-react";
 import { ErrorState, LoadingState } from "@/components/feedback";
+import { DocumentQuizzes } from "@/components/document-quizzes";
+import { DocumentQA } from "@/components/document-qa";
 import { DocumentProcessingPanel } from "@/components/document-processing";
 import { useUser } from "@/components/study-shell";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +23,7 @@ export function DocumentViewer() {
 function Viewer({ documentId }: { documentId: string }) {
   const { user } = useUser();
   const { data: document, error, reload } = useResource<StudyDocument>(`/documents/${documentId}`);
+  const [processingStatus, setProcessingStatus] = useState<StudyDocument["status"]>();
   const [preview, setPreview] = useState("");
   const [fileError, setFileError] = useState("");
   const [revision, setRevision] = useState(0);
@@ -45,7 +48,9 @@ function Viewer({ documentId }: { documentId: string }) {
     <header className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><h1 className="page-heading break-words">{document.title}</h1><p className="mt-2 break-all text-sm text-muted-foreground">{document.original_filename} · {formatFileSize(document.size_bytes)}{document.page_count != null ? ` · ${document.page_count} trang` : ""}</p><div className="mt-3 flex flex-wrap gap-2"><Badge variant="outline">{document.classroom_id ? "Tài liệu lớp" : "Tài liệu cá nhân"}</Badge></div></div>
       {preview && !fileError && <div className="flex flex-wrap gap-2"><a href={preview} download={document.original_filename} className={buttonVariants({ variant: "outline", size: "lg" })}><Download />Tải PDF</a><a href={preview} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "outline", size: "lg" })}><ExternalLink />Mở tab mới</a></div>}
     </header>
-    <DocumentProcessingPanel documentId={documentId} canRetry={document.owner_id === user.id && (document.classroom_id ? user.role === "teacher" : user.role === "student")} />
+    <DocumentProcessingPanel onStatusChange={setProcessingStatus} documentId={documentId} canRetry={document.owner_id === user.id && (document.classroom_id ? user.role === "teacher" : user.role === "student")} />
+    <DocumentQA documentId={documentId} preview={preview} />
+    {user.role !== "admin" && <DocumentQuizzes documentId={documentId} title={document.title} ready={(processingStatus ?? document.status) === "ready"} preview={fileError ? "" : preview} />}
     {fileError ? <ErrorState message={fileError} retry={() => { setPreview(""); setFileError(""); setRevision(value => value + 1); }} /> : preview ? <>
       <iframe src={preview} title={`PDF: ${document.title}`} className="h-[72dvh] min-h-96 w-full rounded-xl border bg-card" />
       <p className="text-xs text-muted-foreground">Nếu trình duyệt không hiển thị PDF, chọn “Mở tab mới” hoặc “Tải PDF”.</p>

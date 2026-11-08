@@ -2,6 +2,8 @@
 
 Các ô mật khẩu tại trang đăng nhập, đăng ký và đặt lại mật khẩu có nút mắt ẩn/hiện; mặc định ẩn, không thay đổi dữ liệu gửi API.
 
+Header trang chủ kiểm tra phiên qua `GET /api/v1/auth/me`, dùng cơ chế refresh hiện có. Khách thấy Đăng nhập/Bắt đầu; người đã đăng nhập thấy liên kết hồ sơ và Vào học (admin: Quản trị). Khi đang kiểm tra hiển thị skeleton, khi lỗi kết nối có nút thử lại; kiểm tra lại khi quay về tab.
+
 ## 1. POST - /api/v1/auth/register: Đăng ký tài khoản sinh viên tại `/register`
 
 Body:

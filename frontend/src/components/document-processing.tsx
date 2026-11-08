@@ -10,7 +10,7 @@ import { useResource } from "@/hooks/use-resource";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { DocumentProcessing } from "@/lib/documents";
 
-export function DocumentProcessingPanel({ documentId, canRetry }: { documentId: string; canRetry: boolean }) {
+export function DocumentProcessingPanel({ documentId, canRetry, onStatusChange }: { documentId: string; canRetry: boolean; onStatusChange?: (status: DocumentProcessing["status"]) => void }) {
   const { data, error, reload, refresh } = useResource<DocumentProcessing>(`/documents/${documentId}/processing`);
   const [pending, setPending] = useState(false);
   const [retryError, setRetryError] = useState("");
@@ -20,6 +20,8 @@ export function DocumentProcessingPanel({ documentId, canRetry }: { documentId: 
     const timer = setTimeout(refresh, 5000);
     return () => clearTimeout(timer);
   }, [data, refresh]);
+
+  useEffect(() => { if (data) onStatusChange?.(data.status); }, [data, onStatusChange]);
 
   async function retry() {
     if (pending) return;

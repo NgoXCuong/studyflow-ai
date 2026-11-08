@@ -41,21 +41,52 @@
 }
 
 @layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground font-sans antialiased; line-height: 1.6; }
-  button:not(:disabled), [role="tab"], [role="button"] { cursor: pointer; }
-  a, button, input, textarea { scroll-margin-block: 6rem; }
-  a:focus-visible { @apply outline-2 outline-offset-4 outline-ring; }
-  ::selection { background: #d1ece2; }
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    line-height: 1.6;
+  }
+  button:not(:disabled),
+  [role="tab"],
+  [role="button"] {
+    cursor: pointer;
+  }
+  a,
+  button,
+  input,
+  textarea {
+    scroll-margin-block: 6rem;
+  }
+  a:focus-visible {
+    @apply outline-2 outline-offset-4 outline-ring;
+  }
+  ::selection {
+    background: #d1ece2;
+  }
 }
 
 @layer components {
-  .page-heading { @apply text-2xl leading-tight font-semibold sm:text-3xl; }
-  .eyebrow { @apply text-xs font-semibold text-primary uppercase; }
-  .field { @apply grid gap-2; }
-  .app-input { @apply h-11 bg-card; }
+  .page-heading {
+    @apply text-2xl leading-tight font-semibold sm:text-3xl;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold text-primary uppercase;
+  }
+  .field {
+    @apply grid gap-2;
+  }
+  .app-input {
+    @apply h-11 bg-card;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
