@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     cohere_embedding_model: Literal["embed-v5.0-fast", "embed-v5.0-pro"] = "embed-v5.0-fast"
     gemini_api_key: SecretStr = SecretStr("")
     gemini_embedding_model: Literal["gemini-embedding-001"] = "gemini-embedding-001"
+    cohere_chat_model: str = "command-a-03-2025"
+    cohere_quiz_model: str = "command-r7b-12-2024"
+    quiz_context_chunks: int = Field(default=12, ge=1, le=30)
+    quiz_timeout_seconds: int = Field(default=180, ge=30, le=600)
+    rag_top_k: int = Field(default=5, ge=1, le=10)
+    rag_timeout_seconds: int = Field(default=60, ge=1, le=120)
     document_chunk_size: int = Field(default=1500, ge=200, le=6000)
     document_chunk_overlap: int = Field(default=200, ge=0)
     document_max_chunks: int = Field(default=1000, gt=0)

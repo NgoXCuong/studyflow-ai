@@ -20,7 +20,7 @@ def require_embedding_key() -> str:
     return key
 
 
-def embed_batch(client: httpx.Client, texts: list[str], title: str) -> tuple[list[list[float]], int | None]:
+def embed_batch(client: httpx.Client, texts: list[str], title: str, *, query: bool = False) -> tuple[list[list[float]], int | None]:
     settings = get_settings()
     provider = settings.embedding_provider
     key = require_embedding_key()
@@ -29,13 +29,14 @@ def embed_batch(client: httpx.Client, texts: list[str], title: str) -> tuple[lis
         headers = {"Authorization": f"Bearer {key}"}
         payload = {"model": settings.cohere_embedding_model,
                    "inputs": [{"content": [{"type": "text", "text": value}]} for value in texts],
-                   "input_type": "search_document", "embedding_types": ["float"], "output_dimension": 768}
+                   "input_type": "search_query" if query else "search_document", "embedding_types": ["float"], "output_dimension": 768}
     else:
         model = f"models/{settings.gemini_embedding_model}"
         url = f"https://generativelanguage.googleapis.com/v1beta/{model}:batchEmbedContents"
         headers = {"x-goog-api-key": key}
         payload = {"requests": [{"model": model, "content": {"parts": [{"text": value}]},
-                    "taskType": "RETRIEVAL_DOCUMENT", "title": title, "outputDimensionality": 768} for value in texts]}
+                    "taskType": "RETRIEVAL_QUERY" if query else "RETRIEVAL_DOCUMENT",
+                    **({} if query else {"title": title}), "outputDimensionality": 768} for value in texts]}
     try:
         response = client.post(url, headers=headers, json=payload)
     except httpx.RequestError as exc:

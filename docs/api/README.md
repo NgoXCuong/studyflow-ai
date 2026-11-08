@@ -5,6 +5,8 @@
 - [M03 — Môn học và lớp học](M03-mon-hoc-lop-hoc.md)
 - [M04 — Tài liệu PDF](M04-tai-lieu.md)
 - [M05 — Xử lý tài liệu cho RAG](M05-xu-ly-tai-lieu.md)
+- [M06 — Hỏi đáp tài liệu](M06-hoi-dap.md)
+- [M07 — Tạo và biên soạn quiz nháp](M07-tao-quiz.md)
 - [M14 — Quản trị tài khoản](M14-quan-tri.md)
 
 Giao diện M01: `/login`, `/register`, `/verify-email`, `/resend-verification`, `/forgot-password`, `/reset-password`; liên kết email điền mã từ fragment `#token=...`, xác nhận bằng nút gửi trên trang.

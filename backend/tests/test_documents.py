@@ -104,7 +104,7 @@ class DocumentTests(unittest.TestCase):
         _attempts.clear()
         with self.engine.begin() as connection:
             connection.exec_driver_sql(
-                "TRUNCATE document_chunks, document_processing_jobs, ai_usage_logs, documents, admin_audit_logs, topics, chapters, classroom_members, classrooms, "
+                "TRUNCATE quiz_questions, quizzes, conversation_turns, conversations, document_chunks, document_processing_jobs, ai_usage_logs, documents, admin_audit_logs, topics, chapters, classroom_members, classrooms, "
                 "courses, auth_tokens, auth_sessions, users"
             )
         self.ids = {}

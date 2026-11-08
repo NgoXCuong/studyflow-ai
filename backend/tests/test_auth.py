@@ -79,7 +79,7 @@ class AuthTests(unittest.TestCase):
 
     def setUp(self):
         with self.db_connection() as db:
-            db.execute("TRUNCATE document_chunks, document_processing_jobs, ai_usage_logs, documents, admin_audit_logs, topics, chapters, classroom_members, classrooms, courses, auth_tokens, auth_sessions, users")
+            db.execute("TRUNCATE quiz_questions, quizzes, conversation_turns, conversations, document_chunks, document_processing_jobs, ai_usage_logs, documents, admin_audit_logs, topics, chapters, classroom_members, classrooms, courses, auth_tokens, auth_sessions, users")
         _attempts.clear()
         self.sent = []
         self.mail_patch = patch("app.services.auth.send_token_email", side_effect=lambda *args: self.sent.append(args))
@@ -328,7 +328,7 @@ class AuthTests(unittest.TestCase):
             self.assertEqual(
                 set(inspect(connection).get_table_names(schema=self.schema)),
                 {"alembic_version", "users", "auth_sessions", "auth_tokens",
-                 "courses", "chapters", "topics", "classrooms", "classroom_members", "admin_audit_logs", "documents", "document_chunks", "document_processing_jobs", "ai_usage_logs"},
+                 "courses", "chapters", "topics", "classrooms", "classroom_members", "admin_audit_logs", "documents", "document_chunks", "document_processing_jobs", "ai_usage_logs", "conversations", "conversation_turns", "quizzes", "quiz_questions"},
             )
 
     def test_upgrade_at_head_preserves_user_and_session(self):

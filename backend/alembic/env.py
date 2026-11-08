@@ -2,7 +2,7 @@ from alembic import context
 
 from app.db.base import Base
 from app.db.connection import get_engine
-from app.models import admin, auth, courses, documents, processing  # noqa: F401
+from app.models import admin, auth, conversations, courses, documents, processing, quizzes  # noqa: F401
 
 config = context.config
 target_metadata = Base.metadata
