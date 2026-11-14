@@ -51,7 +51,11 @@ class QuizOutput(BaseModel):
     document_id: UUID
     title: str
     difficulty: Literal["easy", "medium", "hard"]
-    status: Literal["draft"]
+    status: Literal["draft", "published"]
+    classroom_id: UUID | None
+    reviewed_by: UUID | None
+    published_at: datetime | None
+    copied_from_id: UUID | None
     ai_generated: Literal[True] = True
     generation_model: str
     created_at: datetime
@@ -72,3 +76,13 @@ class QuestionOutput(BaseModel):
 
 class QuizDetail(QuizOutput):
     questions: list[QuestionOutput]
+
+
+class QuizListOutput(QuizOutput):
+    course_id: UUID
+    course_title: str
+    document_title: str
+    classroom_title: str | None
+    question_count: int
+    is_owner: bool
+    active_attempt_id: UUID | None

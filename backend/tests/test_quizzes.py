@@ -1,19 +1,26 @@
 import json
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
 import httpx
 from fastapi import HTTPException
 from pydantic import SecretStr, ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import DBAPIError
+from alembic import command
+from alembic.config import Config
 
 from app.core.config import get_settings
 from app.models.processing import DocumentChunk
 from app.models.quizzes import Quiz, QuizQuestion
+from app.models.documents import Document
+from app.models.auth import User
 from app.schemas.quizzes import GeneratedQuiz, QuestionInput, QuizGenerateInput
-from app.services.quizzes import generate_questions
+from app.services.quizzes import generate_questions, publish_quiz
 from test_qa import QATests
 
 
@@ -53,10 +60,12 @@ class GenerationTests(unittest.TestCase):
             self.assertEqual(item["properties"]["correct_index"]["enum"], [0, 1, 2, 3])
             self.assertEqual(item["properties"]["source_ids"]["items"]["enum"], [str(chunk.id)])
             self.assertEqual(json.loads(payload["messages"][1]["content"])["question_count"], 1)
-            return httpx.Response(200, json={"finish_reason": "COMPLETE", "message": {"content": [
+            return httpx.Response(200, json={"usage": {"tokens": {"input_tokens": 3, "output_tokens": 4}}, "finish_reason": "COMPLETE", "message": {"content": [
                 {"type": "text", "text": json.dumps({"questions": [q]})}]}})
         with patch.object(get_settings(), "cohere_api_key", SecretStr("test-only")), httpx.Client(transport=httpx.MockTransport(handle)) as client:
-            self.assertEqual(len(generate_questions(client, data, [chunk]).questions), 1)
+            usage = {}
+            self.assertEqual(len(generate_questions(client, data, [chunk], usage=usage).questions), 1)
+            self.assertEqual(usage["total_tokens"], 7)
             for field, value in (("correct_index", True), ("correct_index", 4), ("choices", ["A"] * 4),
                                  ("source_ids", [str(uuid4())]), ("explanation", " ")):
                 original = q[field]
@@ -158,13 +167,165 @@ class QuizTests(QATests):
         url = f"/api/v1/documents/{doc['id']}/quizzes"
         with patch("app.services.quizzes.generate_questions", side_effect=HTTPException(503, "AI unavailable")):
             self.assertEqual(self.client().post(url, json={"title": "Quiz"}).status_code, 503)
-        def delete_during_generation(client, data, chunks):
+        def delete_during_generation(client, data, chunks, usage=None):
             self.client().delete(f"/api/v1/documents/{doc['id']}")
             return GeneratedQuiz(questions=[QuestionInput(**question(chunks[0].id))])
         with patch("app.services.quizzes.generate_questions", side_effect=delete_during_generation):
             self.assertEqual(self.client().post(url, json={"title": "Quiz", "question_count": 1}).status_code, 404)
         with Session(self.engine) as db:
             self.assertEqual(db.scalar(select(func.count()).select_from(Quiz)), 0)
+
+    def test_personal_publication_is_idempotent_frozen_and_copyable(self):
+        doc, quiz, q = self.generate()
+        url = f"/api/v1/quizzes/{quiz['id']}"
+        self.assertEqual(self.client().post(url + "/copy").status_code, 409)
+        result = self.client().post(url + "/publish")
+        self.assertEqual(result.status_code, 200, result.text)
+        published = result.json()
+        self.assertEqual(published["status"], "published")
+        self.assertIsNone(published["classroom_id"])
+        self.assertIsNone(published["reviewed_by"])
+        self.assertIsNotNone(published["published_at"])
+        self.assertEqual(self.client().post(url + "/publish").json(), published)
+        self.assertEqual(self.client().patch(url, json={"title": "Changed"}).status_code, 409)
+        self.assertEqual(self.client().delete(url).status_code, 409)
+        self.assertEqual(self.client().put(url + f"/questions/{quiz['questions'][0]['id']}", json=q).status_code, 409)
+        result = self.client().post(url + "/copy")
+        self.assertEqual(result.status_code, 201, result.text)
+        copied = result.json()
+        self.assertEqual(copied["status"], "draft")
+        self.assertEqual(copied["copied_from_id"], quiz["id"])
+        self.assertIsNone(copied["published_at"])
+        self.assertNotEqual(copied["questions"][0]["id"], quiz["questions"][0]["id"])
+        copy_url = f"/api/v1/quizzes/{copied['id']}"
+        q["question"] = "Câu hỏi bản sao"
+        self.assertEqual(self.client().put(copy_url + f"/questions/{copied['questions'][0]['id']}", json=q).status_code, 200)
+        self.assertEqual(self.client().get(url).json()["questions"], quiz["questions"])
+        self.assertEqual(self.client().delete(copy_url).status_code, 200)
+
+    def class_quiz(self):
+        course, classroom = self.classroom()
+        self.join(classroom)
+        doc = self.upload(course, name="teacher", classroom_id=classroom).json()
+        with Session(self.engine) as db, db.begin():
+            db.get(Document, doc["id"]).status = "ready"
+            chunk = DocumentChunk(document_id=doc["id"], position=0, page_number=1, content="StudyFlow hỗ trợ học tập.",
+                                  embedding=[1.] + [0.] * 767, embedding_model=self.settings.embedding_model)
+            db.add(chunk)
+            db.flush()
+            q = question(chunk.id)
+        with patch("app.services.quizzes.generate_questions", return_value=GeneratedQuiz(questions=[QuestionInput(**q)])):
+            response = self.client("teacher").post(f"/api/v1/documents/{doc['id']}/quizzes", json={"title": "Quiz lớp", "question_count": 1})
+        self.assertEqual(response.status_code, 201, response.text)
+        return classroom, doc, response.json(), q
+
+    def test_classroom_review_publication_and_answer_isolation(self):
+        classroom, doc, quiz, _ = self.class_quiz()
+        url = f"/api/v1/quizzes/{quiz['id']}"
+        listing = f"/api/v1/classrooms/{classroom}/quizzes"
+        self.assertEqual(self.client().get(listing).json(), [])
+        self.assertEqual(self.client("teacher").post(url + "/publish").status_code, 409)
+        result = self.client("teacher").patch(f"/api/v1/documents/{doc['id']}", json={"published": True})
+        self.assertEqual(result.status_code, 200, result.text)
+        result = self.client("teacher").post(url + "/publish")
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()["classroom_id"], classroom)
+        self.assertEqual(result.json()["reviewed_by"], str(self.ids["teacher"]))
+        for name in ("student", "teacher"):
+            response = self.client(name).get(listing)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()[0]["id"], quiz["id"])
+            self.assertNotIn("questions", response.text)
+            self.assertNotIn("correct_index", response.text)
+            self.assertNotIn("explanation", response.text)
+            self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(self.client().get(url).status_code, 404)
+        self.assertEqual(self.client("teacher").get(url).status_code, 200)
+        self.assertEqual(self.client("other").get(listing).status_code, 404)
+        self.assertEqual(self.client("teacher2").get(listing).status_code, 404)
+        self.assertEqual(self.client().get(listing + "?limit=0").status_code, 422)
+        self.assertEqual(self.client("teacher").post(url + "/copy").json()["classroom_id"], None)
+        self.assertEqual(len(self.client().get(listing).json()), 1)
+        self.client("teacher").patch(f"/api/v1/documents/{doc['id']}", json={"published": False})
+        self.assertEqual(self.client().get(listing).json(), [])
+        self.client().delete(f"/api/v1/classrooms/{classroom}/members/me")
+        self.assertEqual(self.client().get(listing).status_code, 404)
+
+    def test_student_class_document_quiz_stays_private(self):
+        classroom, doc, _, q = self.class_quiz()
+        self.client("teacher").patch(f"/api/v1/documents/{doc['id']}", json={"published": True})
+        with patch("app.services.quizzes.generate_questions", return_value=GeneratedQuiz(questions=[QuestionInput(**q)])):
+            quiz = self.client().post(f"/api/v1/documents/{doc['id']}/quizzes", json={"title": "Quiz riêng", "question_count": 1}).json()
+        published = self.client().post(f"/api/v1/quizzes/{quiz['id']}/publish")
+        self.assertEqual(published.status_code, 200, published.text)
+        self.assertIsNone(published.json()["classroom_id"])
+        self.assertEqual(self.client().get(f"/api/v1/classrooms/{classroom}/quizzes").json(), [])
+        self.assertEqual(self.client("teacher").get(f"/api/v1/quizzes/{quiz['id']}").status_code, 404)
+
+    def test_publication_and_copy_require_owner_origin_and_document_access(self):
+        doc, quiz, _ = self.generate()
+        url = f"/api/v1/quizzes/{quiz['id']}"
+        for action in ("publish", "copy"):
+            self.assertEqual(self.client("other").post(url + "/" + action).status_code, 404)
+            self.assertEqual(self.client("admin").post(url + "/" + action).status_code, 403)
+            self.assertEqual(self.client().post(url + "/" + action, headers={"Origin": "https://other.invalid"}).status_code, 403)
+        self.client().delete(f"/api/v1/documents/{doc['id']}")
+        self.assertEqual(self.client().post(url + "/publish").status_code, 404)
+        self.assertEqual(self.client().post(url + "/copy").status_code, 404)
+
+    def test_publication_rejects_invalid_question_or_stale_source(self):
+        _, quiz, _ = self.generate()
+        url = f"/api/v1/quizzes/{quiz['id']}"
+        with Session(self.engine) as db, db.begin():
+            question = db.get(QuizQuestion, quiz["questions"][0]["id"])
+            choices = question.choices
+            question.choices = ["A"] * 4
+        self.assertEqual(self.client().post(url + "/publish").status_code, 409)
+        with Session(self.engine) as db, db.begin():
+            question = db.get(QuizQuestion, quiz["questions"][0]["id"])
+            question.choices = choices
+            question.sources = [{**question.sources[0], "chunk_id": str(uuid4())}]
+        self.assertEqual(self.client().post(url + "/publish").status_code, 409)
+        self.assertEqual(self.client().get(url).json()["status"], "draft")
+
+    def test_database_blocks_published_content_changes(self):
+        _, quiz, _ = self.generate()
+        self.assertEqual(self.client().post(f"/api/v1/quizzes/{quiz['id']}/publish").status_code, 200)
+        for statement in (
+            "UPDATE quizzes SET title = 'Changed' WHERE id = :quiz_id",
+            "DELETE FROM quizzes WHERE id = :quiz_id",
+            "UPDATE quiz_questions SET explanation = 'Changed' WHERE quiz_id = :quiz_id",
+            "DELETE FROM quiz_questions WHERE quiz_id = :quiz_id",
+            "INSERT INTO quiz_questions (quiz_id, position, question, choices, correct_index, explanation, topic, sources) "
+            "SELECT quiz_id, 1, question, choices, correct_index, explanation, topic, sources FROM quiz_questions WHERE quiz_id = :quiz_id",
+        ):
+            with self.subTest(statement=statement), self.assertRaises(DBAPIError), self.engine.begin() as db:
+                db.execute(text(statement), {"quiz_id": quiz["id"]})
+
+    def test_concurrent_publication_returns_same_publication(self):
+        _, quiz, _ = self.generate()
+        def publish():
+            with Session(self.engine) as db, db.begin():
+                user = db.get(User, self.ids["student"])
+                return publish_quiz(db, user, quiz["id"]).published_at
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            dates = list(executor.map(lambda _: publish(), range(2)))
+        self.assertEqual(dates[0], dates[1])
+        self.assertIsNotNone(dates[0])
+
+    def test_publication_migration_preserves_existing_draft(self):
+        _, quiz, _ = self.generate()
+        config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+        with self.engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.downgrade(config, "0008_quizzes")
+            command.upgrade(config, "head")
+            command.check(config)
+        result = self.client().get(f"/api/v1/quizzes/{quiz['id']}")
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()["questions"], quiz["questions"])
+        self.assertEqual(result.json()["status"], "draft")
+        self.assertIsNone(result.json()["published_at"])
 
 
 def load_tests(loader, tests, pattern):

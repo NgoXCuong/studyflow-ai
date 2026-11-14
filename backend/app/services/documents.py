@@ -56,7 +56,7 @@ def validate_pdf(file: UploadFile) -> tuple[bytes, str, int]:
     settings = get_settings()
     filename = (file.filename or "").replace("\\", "/").rsplit("/", 1)[-1].strip()
     if not filename.lower().endswith(".pdf") or file.content_type not in {"application/pdf", "application/octet-stream"}:
-        raise HTTPException(415, "Chỉ hỗ trợ file PDF có văn bản.")
+        raise HTTPException(415, "Chỉ hỗ trợ file PDF.")
     if len(filename) > 255 or any(ord(char) < 32 for char in filename):
         raise HTTPException(422, "Tên file không hợp lệ hoặc dài quá 255 ký tự.")
     if file.size is not None and file.size > settings.document_max_size_bytes:
@@ -75,12 +75,6 @@ def validate_pdf(file: UploadFile) -> tuple[bytes, str, int]:
             raise HTTPException(413, f"PDF vượt giới hạn {settings.document_max_pages} trang.")
         if page_count == 0:
             raise HTTPException(422, "PDF không có trang nội dung.")
-        has_text = False
-        for page in reader.pages:
-            if (page.extract_text() or "").strip():
-                has_text = True
-        if not has_text:
-            raise HTTPException(422, "PDF không trích xuất được văn bản; chưa hỗ trợ file scan cần OCR.")
     except (PyPdfError, ValueError, TypeError, KeyError, IndexError, RecursionError) as exc:
         raise HTTPException(422, "Không đọc được nội dung PDF. Vui lòng kiểm tra hoặc xuất lại file.") from exc
     return content, filename, page_count

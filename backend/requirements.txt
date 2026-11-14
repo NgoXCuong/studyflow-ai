@@ -25,6 +25,9 @@ email-validator==2.3.0
 SQLAlchemy==2.0.55
 alembic==1.20.1
 pypdf==6.21.4
+pypdfium2==5.15.2
+Pillow==13.0.0
+tesserocr==2.13.0
 python-multipart==0.0.33
 boto3==1.43.123
 httpx==0.28.1

@@ -2,12 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check, LockKeyhole, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { toast } from "sonner";
+import { BadgeCheck, CalendarDays, KeyRound, LockKeyhole, LogOut, Mail, MonitorSmartphone, ShieldCheck, UserRound } from "lucide-react";
 import { useUser } from "@/components/study-shell";
 import { Feedback, SubmitButton } from "@/components/feedback";
 import { ConfirmAction } from "@/components/study-forms";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/password-input";
 import { Label } from "@/components/ui/label";
@@ -36,16 +37,83 @@ export default function ProfilePage() {
     setChanging(true);
     try {
       await api("/auth/change-password", jsonBody({ current_password: form.get("current_password"), new_password: form.get("new_password") }));
+      toast.success("Đã đổi mật khẩu. Vui lòng đăng nhập lại.");
       router.replace("/login");
     } catch (err) { setPasswordError(errorMessage(err)); }
     finally { setChanging(false); }
   }
-  return <div className="space-y-5"><div><p className="eyebrow mb-3">Tài khoản của bạn</p><h1 className="page-heading">Hồ sơ & bảo mật</h1><p className="mt-3 text-muted-foreground">Cập nhật thông tin và giữ quyền kiểm soát tài khoản.</p></div>
-    <div className="grid items-start gap-6 xl:grid-cols-[300px_1fr]"><Card className="border shadow-none py-0"><CardContent className="p-6"><span className="mb-5 flex size-18 items-center justify-center rounded-2xl bg-accent text-3xl font-semibold text-primary">{user.full_name.slice(0, 1).toUpperCase()}</span><h2 className="text-xl font-semibold break-words">{user.full_name}</h2><p className="mt-1 break-all text-sm text-muted-foreground">{user.email}</p><Badge variant="secondary" className="mt-4">{roleLabel[user.role]}</Badge><dl className="mt-6 space-y-4 border-t pt-5 text-sm"><div><dt className="text-muted-foreground">Ngày tham gia</dt><dd className="mt-1 font-medium">{formatDate(user.created_at)}</dd></div><div><dt className="text-muted-foreground">Xác thực email</dt><dd className="mt-1 flex items-center gap-1.5 font-medium">{user.email_verified_at ? <><Check className="size-4 text-primary" />Đã xác thực</> : "Chưa xác thực"}</dd></div></dl></CardContent></Card>
-      <div className="space-y-6"><Card className="border shadow-none py-0"><CardHeader className="p-6 pb-0"><CardTitle className="flex items-center gap-2 text-lg"><UserRound className="size-5 text-primary" />Thông tin cá nhân</CardTitle><CardDescription>Họ tên giúp giảng viên và thành viên nhận biết bạn.</CardDescription></CardHeader><CardContent className="p-6"><form onSubmit={save} className="grid gap-5"><div className="field"><Label htmlFor="full_name">Họ và tên</Label><Input id="full_name" name="full_name" required maxLength={200} defaultValue={user.full_name} autoComplete="name" className="app-input" /></div><div className="field"><Label htmlFor="profile-email">Email tài khoản</Label><Input id="profile-email" type="email" value={user.email} readOnly className="app-input bg-muted" /><p className="text-xs text-muted-foreground">Email tài khoản không thể thay đổi tại đây.</p></div><Feedback error={profileError} message={message} /><div className="flex justify-end"><SubmitButton pending={saving}>Lưu thông tin</SubmitButton></div></form></CardContent></Card>
-      <Card className="border shadow-none py-0"><CardHeader className="p-6 pb-0"><CardTitle className="flex items-center gap-2 text-lg"><LockKeyhole className="size-5 text-primary" />Đổi mật khẩu</CardTitle><CardDescription>Sau khi đổi mật khẩu, tất cả phiên được thu hồi. Bạn cần đăng nhập lại.</CardDescription></CardHeader><CardContent className="p-6"><form onSubmit={changePassword} className="grid gap-5"><div className="field"><Label htmlFor="current_password">Mật khẩu hiện tại</Label><PasswordInput id="current_password" name="current_password" required maxLength={128} autoComplete="current-password" className="app-input" /></div><div className="grid gap-5 sm:grid-cols-2"><div className="field"><Label htmlFor="new_password">Mật khẩu mới</Label><PasswordInput id="new_password" name="new_password" required minLength={8} maxLength={128} autoComplete="new-password" className="app-input" /></div><div className="field"><Label htmlFor="confirm_password">Nhập lại mật khẩu mới</Label><PasswordInput id="confirm_password" name="confirm_password" required minLength={8} maxLength={128} autoComplete="new-password" className="app-input" /></div></div><p className="text-xs text-muted-foreground">Mật khẩu mới có từ 8 đến 128 ký tự.</p><Feedback error={passwordError} /><div className="flex justify-end"><SubmitButton pending={changing}>Đổi mật khẩu</SubmitButton></div></form></CardContent></Card>
-      <Card className="border shadow-none py-0"><CardContent className="flex flex-wrap items-center justify-between gap-5 p-6"><div><h2 className="flex items-center gap-2 font-semibold"><ShieldCheck className="size-5 text-primary" />Phiên đăng nhập</h2><p className="mt-2 max-w-md text-sm text-muted-foreground">Đăng xuất khỏi tất cả thiết bị, bao gồm phiên hiện tại.</p></div><ConfirmAction label="Đăng xuất tất cả" icon={<LogOut />} title="Đăng xuất khỏi tất cả phiên?" description="Bạn sẽ cần đăng nhập lại trên tất cả thiết bị đang sử dụng tài khoản này." action={() => api("/auth/logout-all", { method: "POST" })} onDone={() => router.replace("/login")} variant="outline" /></CardContent></Card>
-      <p className="flex items-center gap-2 text-xs text-muted-foreground"><LogOut className="size-3.5" />Đăng xuất phiên hiện tại từ thanh điều hướng.</p></div>
+  const initials = user.full_name.trim().split(/\s+/).slice(-2).map(word => word[0]).join("").toUpperCase();
+  return <div className="mx-auto w-full max-w-6xl space-y-6">
+    <header>
+      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Hồ sơ & bảo mật</h1>
+      <p className="mt-2 text-sm text-muted-foreground">Quản lý thông tin cá nhân và bảo vệ tài khoản của bạn.</p>
+    </header>
+
+    <div className="grid items-start gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+      <Card className="gap-0 border border-primary/15 py-0 shadow-sm ring-0">
+        <CardContent className="space-y-5 p-5">
+          <div className="flex items-center gap-3 border-b pb-5 lg:flex-col lg:items-start">
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-accent text-xl font-semibold text-primary">{initials}</span>
+            <div className="min-w-0"><h2 className="break-words text-lg font-semibold">{user.full_name}</h2><p className="mt-1 break-all text-sm text-muted-foreground">{user.email}</p><Badge variant="secondary" className="mt-2">{roleLabel[user.role]}</Badge></div>
+          </div>
+          <dl className="space-y-4 text-sm">
+            <div><dt className="flex items-center gap-2 text-xs text-muted-foreground"><CalendarDays className="size-4" />Ngày tham gia</dt><dd className="mt-1.5 font-medium">{formatDate(user.created_at)}</dd></div>
+            <div><dt className="flex items-center gap-2 text-xs text-muted-foreground"><Mail className="size-4" />Xác thực email</dt><dd className="mt-1.5 flex items-center gap-1.5 font-medium">{user.email_verified_at ? <><BadgeCheck className="size-4 text-primary" />Đã xác thực</> : "Chưa xác thực"}</dd></div>
+          </dl>
+        </CardContent>
+        <CardFooter className="gap-2 bg-primary/5 px-5 py-3 text-xs"><span className={`size-2 shrink-0 rounded-full ${user.status === "active" ? "bg-primary" : "bg-destructive"}`} />{user.status === "active" ? "Tài khoản đang hoạt động" : "Tài khoản đã khóa"}</CardFooter>
+      </Card>
+
+      <div className="min-w-0 space-y-5">
+        <Card className="gap-0 border border-primary/15 py-0 shadow-sm ring-0">
+          <CardHeader className="border-b bg-primary/5 px-5 py-4">
+            <CardTitle><h2 className="flex items-center gap-2 text-base font-semibold"><UserRound className="size-4 text-primary" />Thông tin cá nhân</h2></CardTitle>
+            <CardDescription>Tên này được hiển thị trong hồ sơ và lớp học.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-5">
+            <form onSubmit={save} className="space-y-4">
+              <fieldset disabled={saving} className="grid min-w-0 gap-4 sm:grid-cols-2">
+                <div className="field"><Label htmlFor="full_name">Họ và tên</Label><Input id="full_name" name="full_name" required maxLength={200} defaultValue={user.full_name} autoComplete="name" placeholder="Nhập họ và tên của bạn" className="h-11" /></div>
+                <div className="field"><Label htmlFor="profile-email">Email tài khoản <LockKeyhole className="size-3 text-muted-foreground" aria-hidden="true" /></Label><Input id="profile-email" type="email" value={user.email} readOnly aria-describedby="profile-email-hint" className="h-11 bg-muted/60 text-muted-foreground" /><p id="profile-email-hint" className="text-xs text-muted-foreground">Email không thể thay đổi tại đây.</p></div>
+              </fieldset>
+              <Feedback error={profileError} message={message} />
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><p className="text-xs text-muted-foreground">Kiểm tra thông tin trước khi lưu.</p><SubmitButton pending={saving}>Lưu thông tin</SubmitButton></div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="gap-0 border border-primary/15 py-0 shadow-sm ring-0">
+          <CardHeader className="border-b bg-primary/5 px-5 py-4">
+            <CardTitle><h2 className="flex items-center gap-2 text-base font-semibold"><KeyRound className="size-4 text-primary" />Đổi mật khẩu</h2></CardTitle>
+            <CardDescription>Sử dụng mật khẩu riêng cho tài khoản StudyFlow.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-5">
+            <form onSubmit={changePassword} className="space-y-4">
+              <fieldset disabled={changing} className="grid min-w-0 gap-4">
+                <div className="field"><Label htmlFor="current_password">Mật khẩu hiện tại</Label><PasswordInput id="current_password" name="current_password" required maxLength={128} autoComplete="current-password" placeholder="Nhập mật khẩu đang sử dụng" className="h-11" /></div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="field"><Label htmlFor="new_password">Mật khẩu mới</Label><PasswordInput id="new_password" name="new_password" required minLength={8} maxLength={128} autoComplete="new-password" aria-describedby="password-hint" placeholder="Từ 8 đến 128 ký tự" className="h-11" /></div>
+                  <div className="field"><Label htmlFor="confirm_password">Nhập lại mật khẩu mới</Label><PasswordInput id="confirm_password" name="confirm_password" required minLength={8} maxLength={128} autoComplete="new-password" placeholder="Xác nhận mật khẩu mới" className="h-11" /></div>
+                </div>
+                <p id="password-hint" className="text-xs text-muted-foreground">Mật khẩu mới có từ 8 đến 128 ký tự.</p>
+              </fieldset>
+              <p className="flex items-start gap-2 border-l-2 border-amber-500 bg-amber-50/70 px-3 py-2.5 text-xs leading-relaxed text-amber-950"><LockKeyhole className="mt-0.5 size-4 shrink-0" />Đổi mật khẩu sẽ kết thúc tất cả phiên đăng nhập. Bạn cần đăng nhập lại bằng mật khẩu mới.</p>
+              <Feedback error={passwordError} />
+              <div className="flex justify-end border-t pt-4"><SubmitButton pending={changing}>Cập nhật mật khẩu</SubmitButton></div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="gap-0 border border-primary/15 py-0 shadow-sm ring-0">
+          <CardContent className="space-y-4 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0 flex-1 basis-56"><h2 className="flex items-center gap-2 text-base font-semibold"><MonitorSmartphone className="size-4 text-primary" />Phiên đăng nhập</h2><p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">Kết thúc đăng nhập trên tất cả thiết bị, bao gồm thiết bị này.</p></div>
+              <ConfirmAction label="Đăng xuất tất cả" icon={<LogOut />} title="Đăng xuất khỏi tất cả phiên?" description="Bạn sẽ cần đăng nhập lại trên tất cả thiết bị đang sử dụng tài khoản này." action={() => api("/auth/logout-all", { method: "POST" })} onDone={() => router.replace("/login")} variant="outline" />
+            </div>
+            <p className="flex items-start gap-2 border-t pt-3 text-xs leading-relaxed text-muted-foreground"><ShieldCheck className="size-4 shrink-0 text-primary" />Để đăng xuất riêng thiết bị này, dùng nút Đăng xuất trên thanh điều hướng.</p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   </div>;
 }

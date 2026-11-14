@@ -4,11 +4,13 @@ import argparse
 import logging
 import re
 import time
+from contextlib import ExitStack
 from datetime import timedelta
 from io import BytesIO
 from uuid import UUID, uuid4
 
 import httpx
+import pypdfium2 as pdfium
 from fastapi import HTTPException
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
@@ -22,6 +24,7 @@ from app.models.courses import Classroom, Course
 from app.models.documents import Document
 from app.models.processing import AIUsageLog, DocumentChunk, DocumentProcessingJob
 from app.services.document_storage import read_file_bytes
+from app.services.document_ocr import ocr_page, open_ocr_engine
 from app.services.documents import get_document, visible_documents
 from app.services.embeddings import EmbeddingError, embed_batch, require_embedding_key
 
@@ -74,34 +77,44 @@ def retry_processing(db: Session, user: User, document_id: UUID) -> dict:
     return processing_output(db, document)
 
 
-def extract_chunks(content: bytes) -> tuple[list[dict], int]:
+def extract_chunks(content: bytes, *, heartbeat=None) -> tuple[list[dict], int]:
     settings = get_settings()
     try:
-        reader = PdfReader(BytesIO(content))
-        if reader.is_encrypted or not 0 < len(reader.pages) <= settings.document_max_pages:
-            raise EmbeddingError("invalid_pdf", "PDF được bảo vệ hoặc vượt giới hạn số trang xử lý.")
-        chunks = []
-        for page_number, page in enumerate(reader.pages, 1):
-            text = re.sub(r"\s+", " ", (page.extract_text() or "").replace("\x00", "")).strip()
-            start = 0
-            while start < len(text):
-                end = min(start + settings.document_chunk_size, len(text))
-                if end < len(text):
-                    boundary = text.rfind(" ", start + settings.document_chunk_size // 2, end)
-                    if boundary > start + settings.document_chunk_overlap:
-                        end = boundary
-                value = text[start:end].strip()
-                if value:
-                    chunks.append({"position": len(chunks), "page_number": page_number, "content": value})
-                    if len(chunks) > settings.document_max_chunks:
-                        raise EmbeddingError("chunk_limit", "Tài liệu vượt giới hạn số đoạn xử lý cho phép.")
-                if end == len(text):
-                    break
-                start = end - settings.document_chunk_overlap
-        if not chunks:
-            raise EmbeddingError("empty_pdf", "PDF không có văn bản để tạo embedding.")
-        return chunks, len(reader.pages)
-    except (PyPdfError, ValueError, TypeError, KeyError, IndexError, RecursionError) as exc:
+        with ExitStack() as stack:
+            reader = PdfReader(BytesIO(content))
+            if reader.is_encrypted or not 0 < len(reader.pages) <= settings.document_max_pages:
+                raise EmbeddingError("invalid_pdf", "PDF được bảo vệ hoặc vượt giới hạn số trang xử lý.")
+            chunks = []
+            ocr_engine = ocr_document = None
+            for page_number, page in enumerate(reader.pages, 1):
+                text = re.sub(r"\s+", " ", (page.extract_text() or "").replace("\x00", "")).strip()
+                if not text:
+                    if heartbeat is not None:
+                        heartbeat()
+                    if ocr_engine is None:
+                        ocr_engine = stack.enter_context(open_ocr_engine())
+                        ocr_document = stack.enter_context(pdfium.PdfDocument(content))
+                    logger.info("OCR page %s/%s", page_number, len(reader.pages))
+                    text = re.sub(r"\s+", " ", ocr_page(ocr_document, page_number - 1, ocr_engine).replace("\x00", "")).strip()
+                start = 0
+                while start < len(text):
+                    end = min(start + settings.document_chunk_size, len(text))
+                    if end < len(text):
+                        boundary = text.rfind(" ", start + settings.document_chunk_size // 2, end)
+                        if boundary > start + settings.document_chunk_overlap:
+                            end = boundary
+                    value = text[start:end].strip()
+                    if value:
+                        chunks.append({"position": len(chunks), "page_number": page_number, "content": value})
+                        if len(chunks) > settings.document_max_chunks:
+                            raise EmbeddingError("chunk_limit", "Tài liệu vượt giới hạn số đoạn xử lý cho phép.")
+                    if end == len(text):
+                        break
+                    start = end - settings.document_chunk_overlap
+            if not chunks:
+                raise EmbeddingError("empty_pdf", "PDF không có văn bản đọc được sau trích xuất và OCR. Vui lòng kiểm tra chất lượng bản scan.")
+            return chunks, len(reader.pages)
+    except (PyPdfError, pdfium.PdfiumError, ValueError, TypeError, KeyError, IndexError, RecursionError) as exc:
         raise EmbeddingError("invalid_pdf", "Không trích xuất được văn bản từ PDF.") from exc
 
 
@@ -182,7 +195,8 @@ def process_once(engine=None) -> bool:
     logger.info("Processing document %s: reading source PDF", document_id)
     try:
         document = renew_claim(engine, document_id, token)
-        chunks, page_count = extract_chunks(read_file_bytes(document.storage_key))
+        chunks, page_count = extract_chunks(read_file_bytes(document.storage_key),
+                                          heartbeat=lambda: renew_claim(engine, document_id, token))
         logger.info("Document %s: extracted %s pages into %s chunks", document_id, page_count, len(chunks))
         with httpx.Client(timeout=settings.embedding_timeout_seconds) as client:
             for start in range(0, len(chunks), settings.embedding_batch_size):

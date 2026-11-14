@@ -1,10 +1,12 @@
 "use client";
 
+import { toast } from "sonner";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, FileText, Search } from "lucide-react";
 import { DocumentForm } from "@/components/document-form";
-import { EmptyState, ErrorState, Feedback, LoadingState, Pagination } from "@/components/feedback";
+import { ErrorState, LoadingState, Pagination } from "@/components/feedback";
 import { ConfirmAction } from "@/components/study-forms";
 import { useUser } from "@/components/study-shell";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +32,6 @@ export function DocumentList({ course, classrooms, chapters: suppliedChapters, c
   const [chapterError, setChapterError] = useState("");
   const [chapterRevision, setChapterRevision] = useState(0);
   const [draft, setDraft] = useState("");
-  const [notice, setNotice] = useState("");
   const [filters, setFilters] = useState({ q: "", classroom: classroomId ?? "all", chapter: "all", page: 0 });
   const chapters = suppliedChapters ?? loadedChapters;
   const canManage = course.owner_id === user.id && (course.kind === "personal" || user.role === "teacher");
@@ -58,22 +59,21 @@ export function DocumentList({ course, classrooms, chapters: suppliedChapters, c
   }, [course.id, suppliedChapters, chapterRevision]);
 
   function uploaded() {
-    setNotice("Đã tải PDF lên. Tài liệu đang chờ xử lý.");
+    toast.success("Đã tải PDF lên. Tài liệu đang chờ xử lý.");
     setDraft("");
     const reset = { q: "", classroom: classroomId ?? "all", chapter: "all", page: 0 };
     if (!filters.q && filters.classroom === reset.classroom && filters.chapter === "all" && filters.page === 0) reload();
     else setFilters(reset);
   }
-  function saved(message: string) { setNotice(message); reload(); }
+  function saved(message: string) { toast.success(message); reload(); }
 
   return <section className="min-w-0 space-y-4" aria-label="Tài liệu PDF">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Tài liệu PDF</h2><p className="mt-1 text-sm text-muted-foreground">{course.kind === "personal" ? "Tài liệu riêng trong môn học của bạn." : classroomId ? "Tài liệu thuộc lớp học này." : "Tài liệu được phân biệt theo từng lớp trong môn."}</p></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-start gap-3"><span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-primary"><FileText className="size-5" /></span><div><h2 className="text-lg font-semibold">Thư viện tài liệu PDF</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">{course.kind === "personal" ? "Tài liệu riêng để đọc, hỏi đáp và tạo quiz trong môn học." : classroomId ? "Tài liệu được chia sẻ trong lớp học này." : "Chọn lớp hoặc chương để tìm đúng tài liệu trong môn."}</p></div></div>
       {canUpload && chapters && <DocumentForm course={course} chapters={chapters} classrooms={classrooms} classroomId={classroomId} onSaved={uploaded} disabled={course.kind === "teaching" && !classrooms.length} />}
     </div>
     {canUpload && course.kind === "teaching" && !classrooms.length && <p className="text-sm text-muted-foreground">Tạo lớp học trong môn trước khi tải tài liệu lên.</p>}
-    <Feedback message={notice} />
     {chapterError && <ErrorState message={chapterError} retry={() => { setChapterError(""); setChapterRevision(value => value + 1); }} />}
-    <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3" onSubmit={event => { event.preventDefault(); setFilters(value => ({ ...value, q: draft.trim(), page: 0 })); }}>
+    <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-background/50 p-4" onSubmit={event => { event.preventDefault(); setFilters(value => ({ ...value, q: draft.trim(), page: 0 })); }}>
       <div className="field min-w-0 flex-1 basis-48"><Label htmlFor={`document-search-${classroomId ?? course.id}`}>Tìm tài liệu</Label><Input id={`document-search-${classroomId ?? course.id}`} value={draft} onChange={event => setDraft(event.target.value)} maxLength={200} className="app-input" placeholder="Tên tài liệu hoặc tên file…" /></div>
       {!classroomId && course.kind === "teaching" && <div className="field min-w-0 flex-1 basis-44"><Label htmlFor={`document-class-${course.id}`}>Lớp học</Label><Select value={filters.classroom} onValueChange={value => setFilters(current => ({ ...current, classroom: value ?? "all", page: 0 }))} items={[{ value: "all", label: "Tất cả lớp" }, ...classrooms.map(item => ({ value: item.id, label: item.title }))]}><SelectTrigger id={`document-class-${course.id}`} className="h-11 w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tất cả lớp</SelectItem>{classrooms.map(item => <SelectItem key={item.id} value={item.id}>{item.title}</SelectItem>)}</SelectContent></Select></div>}
       {chapters && <div className="field min-w-0 flex-1 basis-44"><Label htmlFor={`document-chapter-${classroomId ?? course.id}`}>Chương học</Label><Select value={filters.chapter} onValueChange={value => setFilters(current => ({ ...current, chapter: value ?? "all", page: 0 }))} items={[{ value: "all", label: "Tất cả chương" }, ...chapters.map(item => ({ value: item.id, label: item.title }))]}><SelectTrigger id={`document-chapter-${classroomId ?? course.id}`} className="h-11 w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tất cả chương</SelectItem>{chapters.map(item => <SelectItem key={item.id} value={item.id}>{item.title}</SelectItem>)}</SelectContent></Select></div>}
@@ -81,7 +81,7 @@ export function DocumentList({ course, classrooms, chapters: suppliedChapters, c
       {(filters.q || filters.chapter !== "all" || (!classroomId && filters.classroom !== "all")) && <Button type="button" variant="ghost" className="h-11" onClick={() => { setDraft(""); setFilters({ q: "", chapter: "all", classroom: classroomId ?? "all", page: 0 }); }}>Bỏ lọc</Button>}
     </form>
     {error ? <ErrorState message={error} retry={reload} /> : !data ? <LoadingState /> : <>
-      {!data.length ? <EmptyState title="Chưa có tài liệu trong danh sách" description={filters.q || filters.chapter !== "all" ? "Thử tên khác hoặc bỏ bộ lọc để xem thêm tài liệu." : canUpload ? "Tải PDF có văn bản lên để bắt đầu. Tài liệu lớp chỉ hiển thị cho sinh viên sau khi được công bố." : "Tài liệu được phép đọc sẽ xuất hiện tại đây khi giảng viên công bố."} /> : <div className="space-y-3">{data.slice(0, 12).map(document => <Card key={document.id} className="gap-0 border py-0 shadow-none"><CardContent className="p-4">
+      {!data.length ? <Card className="gap-0 rounded-xl border border-dashed bg-background/40 py-0 shadow-none ring-0"><CardContent className="flex flex-col items-start gap-4 p-5 sm:flex-row"><span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent text-primary"><FileText className="size-6" /></span><div><h3 className="font-semibold">Chưa có tài liệu trong danh sách</h3><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{filters.q || filters.chapter !== "all" ? "Thử tên khác hoặc bỏ bộ lọc để xem thêm tài liệu." : canUpload ? "Tải PDF có văn bản hoặc bản scan lên bằng nút phía trên để bắt đầu. Tài liệu lớp chỉ hiển thị cho sinh viên sau khi được công bố." : "Tài liệu được phép đọc sẽ xuất hiện tại đây khi giảng viên công bố. Bạn có thể kiểm tra lại lớp hoặc chương đang chọn."}</p></div></CardContent></Card> : <div className="grid items-stretch gap-4 xl:grid-cols-2">{data.slice(0, 12).map(document => <Card key={document.id} className="min-w-0 gap-0 rounded-xl border py-0 shadow-none ring-0"><CardContent className="p-4 sm:p-5">
         <div className="flex items-start gap-3"><span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-primary"><FileText className="size-5" /></span><div className="min-w-0 flex-1"><h3 className="font-semibold break-words"><Link href={`/documents/${document.id}`} className="hover:text-primary">{document.title}</Link></h3><p className="mt-1 break-all text-xs text-muted-foreground">{document.original_filename} · {formatFileSize(document.size_bytes)}{document.page_count != null ? ` · ${document.page_count} trang` : ""}</p></div><div className="hidden shrink-0 text-xs text-muted-foreground sm:block">{formatDate(document.created_at)}</div></div>
         <div className="mt-3 flex flex-wrap items-center gap-2"><DocumentStatusBadge status={document.status} /><Badge variant="outline">{document.classroom_id ? (classrooms.find(item => item.id === document.classroom_id)?.title ?? "Tài liệu lớp") : "Cá nhân"}</Badge>{document.classroom_id && <Badge variant="secondary">{document.published_at ? "Đã công bố" : "Chưa công bố"}</Badge>}{document.chapter_id && chapters?.find(item => item.id === document.chapter_id) && <span className="text-xs text-muted-foreground">{chapters.find(item => item.id === document.chapter_id)?.title}</span>}</div>
         <div className="mt-3 flex flex-wrap gap-2"><Button variant="outline" className="h-10" render={<Link href={`/documents/${document.id}`} />} nativeButton={false}><Eye />Mở PDF</Button>

@@ -1,6 +1,8 @@
 "use client";
 
 import "./auth-form.css";
+import { classroomCodeFromHash } from "@/lib/classroom-invites";
+import { toast } from "sonner";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -111,8 +113,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     setPending(true);
     try {
       if (mode === "login") {
-        await api<User>("/auth/login", jsonBody(payload), false);
-        router.replace("/courses");
+        const user = await api<User>("/auth/login", jsonBody(payload), false);
+        toast.success("Đăng nhập thành công.");
+        const code = classroomCodeFromHash(window.location.hash);
+        router.replace(user.role === "student" ? code ? `/classrooms#join-code=${encodeURIComponent(code)}` : "/overview" : "/courses");
       } else {
         const result = await api<{ message: string }>(
           `/auth/${mode}`,
@@ -254,7 +258,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             {config.description}
           </p>
           <div className="auth-form-body space-y-4">
-            <Feedback error={error} message={message} />
+            <Feedback error={error} message={message} inlineError={false} />
+            {message && <p className="text-sm leading-relaxed text-muted-foreground">{message}</p>}
             {completed ? (
               <div className="space-y-5">
                 <div className="flex items-center gap-2 text-primary">

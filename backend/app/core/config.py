@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     document_chunk_size: int = Field(default=1500, ge=200, le=6000)
     document_chunk_overlap: int = Field(default=200, ge=0)
     document_max_chunks: int = Field(default=1000, gt=0)
+    ocr_tessdata_dir: Path = Path(__file__).resolve().parents[2] / "storage" / "tessdata"
+    ocr_languages: str = Field(default="vie+eng", pattern=r"^[a-z_]+(?:\+[a-z_]+)*$")
+    ocr_timeout_seconds: int = Field(default=60, ge=1, le=120)
     embedding_batch_size: int = Field(default=32, ge=1, le=100)
     embedding_timeout_seconds: int = Field(default=30, ge=1, le=120)
     processing_lease_seconds: int = Field(default=300, ge=180)

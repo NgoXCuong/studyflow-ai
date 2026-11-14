@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import { FileUp, LoaderCircle, Pencil } from "lucide-react";
 import { Feedback } from "@/components/feedback";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,7 +42,7 @@ export function DocumentForm({ course, chapters, classrooms, classroomId, docume
     event.preventDefault(); setError("");
     if (!title.trim()) { setError("Vui lòng nhập tên tài liệu."); return; }
     if (!document && (!file || !file.name.toLowerCase().endsWith(".pdf"))) {
-      setError("Vui lòng chọn một file PDF có văn bản."); return;
+      setError("Vui lòng chọn một file PDF."); return;
     }
     if (!document && file && file.size > documentMaxSize) {
       setError("File vượt dung lượng tối đa 20 MiB."); return;
@@ -75,8 +75,8 @@ export function DocumentForm({ course, chapters, classrooms, classroomId, docume
       {document ? <Pencil /> : <FileUp />}{document ? "Sửa tài liệu" : "Tải PDF lên"}
     </DialogTrigger>
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
-      <DialogHeader><DialogTitle>{document ? "Sửa thông tin tài liệu" : "Thêm tài liệu PDF"}</DialogTitle>
-        <DialogDescription>{document ? "Đổi tên hoặc sắp xếp tài liệu vào chương. Môn học, lớp và file gốc được giữ nguyên." : "PDF có văn bản, tối đa 20 MiB và 500 trang. Chưa hỗ trợ PDF khóa mật khẩu hoặc scan cần OCR."}</DialogDescription>
+      <DialogHeader><FileUp className="mb-1 size-6 text-primary" aria-hidden="true" /><DialogTitle>{document ? "Sửa thông tin tài liệu" : "Thêm tài liệu PDF"}</DialogTitle>
+        <DialogDescription>{document ? "Đổi tên hoặc sắp xếp tài liệu vào chương. Môn học, lớp và file gốc được giữ nguyên." : "PDF có văn bản hoặc bản scan, tối đa 20 MiB và 500 trang. Bản scan được nhận dạng chữ tự động, có thể mất thêm thời gian. Chưa hỗ trợ PDF khóa mật khẩu."}</DialogDescription>
       </DialogHeader>
       <form onSubmit={submit} className="grid gap-4">
         <fieldset disabled={pending} className="grid min-w-0 gap-4">
@@ -104,9 +104,9 @@ export function DocumentForm({ course, chapters, classrooms, classroomId, docume
           {!document && course.kind === "teaching" && <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">Tài liệu mới chỉ hiển thị với bạn. Công bố sau khi kiểm tra để sinh viên trong lớp có thể đọc.</p>}
         </fieldset>
         <Feedback error={error} />
-        <div className="flex justify-end gap-2"><Button type="button" variant="outline" className="h-11" disabled={pending} onClick={() => changeOpen(false)}>Hủy</Button>
+        <DialogFooter><Button type="button" variant="outline" className="h-11" disabled={pending} onClick={() => changeOpen(false)}>Hủy</Button>
           <Button type="submit" className="h-11" disabled={pending}>{pending && <LoaderCircle className="animate-spin" />}{pending ? (document ? "Đang lưu…" : "Đang tải lên…") : document ? "Lưu thay đổi" : "Tải lên"}</Button>
-        </div>
+        </DialogFooter>
       </form>
     </DialogContent>
   </Dialog>;

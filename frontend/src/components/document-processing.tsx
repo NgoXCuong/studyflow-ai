@@ -44,7 +44,7 @@ export function DocumentProcessingPanel({ documentId, canRetry, onStatusChange }
       {error ? <ErrorState message={`Không tải được trạng thái xử lý: ${error}`} retry={reload} /> : !data ?
         <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Đang tải trạng thái xử lý…</p> : <>
           {data.status === "queued" && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Clock3 className="size-4 shrink-0" />Tài liệu đang chờ xử lý. Trạng thái sẽ tự cập nhật.</p>}
-          {data.status === "processing" && <p className="flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 shrink-0 animate-spin" />Đang phân tích nội dung tài liệu. Bạn vẫn có thể đọc PDF gốc.</p>}
+          {data.status === "processing" && <p className="flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 shrink-0 animate-spin" />Đang phân tích nội dung và nhận dạng chữ nếu là bản scan. Bạn vẫn có thể đọc PDF gốc.</p>}
           {data.status === "ready" && <p className="text-sm text-muted-foreground">Đã xử lý xong nội dung tài liệu · {data.chunk_count.toLocaleString("vi-VN")} đoạn văn bản.</p>}
           {data.status === "failed" && <div className="space-y-3">
             <Feedback error={data.error_message ?? "Chưa xử lý được nội dung tài liệu."} />

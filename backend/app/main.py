@@ -22,7 +22,7 @@ app.include_router(api_router)
 @app.middleware("http")
 async def protect_auth_responses(request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith(("/api/v1/auth/", "/api/v1/users/", "/api/v1/courses", "/api/v1/classrooms", "/api/v1/admin/", "/api/v1/documents/", "/api/v1/conversations/", "/api/v1/quizzes/")):
+    if request.url.path.startswith(("/api/v1/auth/", "/api/v1/users/", "/api/v1/courses", "/api/v1/classrooms", "/api/v1/admin/", "/api/v1/documents/", "/api/v1/conversations/", "/api/v1/quizzes", "/api/v1/attempts/", "/api/v1/study-materials", "/api/v1/study-plans", "/api/v1/overview")):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Pragma"] = "no-cache"
     return response

@@ -13,11 +13,12 @@ from app.schemas.qa import AnswerOutput, AnswerSource
 from app.services.document_processing import ready_chunks
 from app.services.documents import get_document
 from app.services.embeddings import EmbeddingError, embed_batch
+from app.services.ai_usage import reported_tokens, track_usage
 
 NO_EVIDENCE = "Không tìm thấy đủ căn cứ trong tài liệu để trả lời câu hỏi này."
 
 
-def generate_answer(client: httpx.Client, question: str, chunks: list[DocumentChunk], history: list[dict] | None = None) -> tuple[str, list[str]]:
+def generate_answer(client: httpx.Client, question: str, chunks: list[DocumentChunk], history: list[dict] | None = None, usage: dict | None = None) -> tuple[str, list[str]]:
     settings = get_settings()
     context = [{"id": str(c.id), "page": c.page_number, "text": c.content} for c in chunks]
     try:
@@ -42,6 +43,8 @@ def generate_answer(client: httpx.Client, question: str, chunks: list[DocumentCh
         raise HTTPException(503, "Dịch vụ trả lời từ chối yêu cầu. Kiểm tra model, API key và hạn mức Cohere.")
     try:
         data = response.json()
+        if usage is not None:
+            usage["total_tokens"] = reported_tokens(data)
         if data.get("finish_reason", "").upper() != "COMPLETE":
             raise ValueError("Incomplete answer")
         content = data["message"]["content"]
@@ -74,7 +77,9 @@ def answer_question(db: Session, user: User, document_id: UUID, question: str, *
     with httpx.Client(timeout=settings.rag_timeout_seconds) as client:
         try:
             retrieval_question = "\n".join([turn["question"] for turn in (history or [])] + [question])
-            vectors, _ = embed_batch(client, [retrieval_question], "", query=True)
+            with track_usage(db, user.id, document_id, settings.embedding_provider, settings.embedding_model,
+                             "question_embedding", len(retrieval_question), 1) as usage:
+                vectors, usage["total_tokens"] = embed_batch(client, [retrieval_question], "", query=True)
         except EmbeddingError as exc:
             raise HTTPException(503, str(exc)) from exc
         chunks = list(db.scalars(ready_chunks(user).where(
@@ -84,7 +89,11 @@ def answer_question(db: Session, user: User, document_id: UUID, question: str, *
             .limit(settings.rag_top_k)))
         if not chunks:
             return AnswerOutput(answer=NO_EVIDENCE, insufficient_evidence=True)
-        answer, ids = generate_answer(client, question, chunks, history=history) if history else generate_answer(client, question, chunks)
+        characters = len(question) + sum(len(chunk.content) for chunk in chunks) + sum(
+            len(turn["question"]) + len(turn["answer"]) for turn in (history or []))
+        with track_usage(db, user.id, document_id, "cohere", settings.cohere_chat_model,
+                         "qa_generation", characters, len(chunks)) as usage:
+            answer, ids = generate_answer(client, question, chunks, history=history, usage=usage)
     # Recheck access after the external request (publication or membership may have changed).
     get_document(db, user, document_id)
     if not answer or not ids:

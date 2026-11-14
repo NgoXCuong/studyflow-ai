@@ -25,6 +25,7 @@ from app.db.connection import get_db, get_engine
 from app.main import app
 from app.models.auth import User
 from app.models.documents import Document
+from app.models.processing import DocumentProcessingJob
 from app.services.documents import upload_document
 from app.services.document_cleanup import cleanup_documents
 
@@ -102,11 +103,18 @@ class DocumentTests(unittest.TestCase):
 
     def setUp(self):
         _attempts.clear()
+        tables_to_clear = (
+            "study_materials, study_tasks, study_plans, attempt_answers, quiz_attempts, quiz_questions, quizzes, "
+            "conversation_turns, conversations, document_chunks, document_processing_jobs, ai_usage_logs, documents, "
+            "admin_audit_logs, topics, chapters, classroom_members, classrooms, courses, auth_tokens, auth_sessions, users"
+        )
         with self.engine.begin() as connection:
-            connection.exec_driver_sql(
-                "TRUNCATE quiz_questions, quizzes, conversation_turns, conversations, document_chunks, document_processing_jobs, ai_usage_logs, documents, admin_audit_logs, topics, chapters, classroom_members, classrooms, "
-                "courses, auth_tokens, auth_sessions, users"
-            )
+            if not self.schema.startswith("test_documents_") or len(self.schema) != 47 or connection.exec_driver_sql("SELECT current_schema()").scalar() != self.schema:
+                raise RuntimeError("Refusing cleanup outside the isolated test schema")
+            tables = connection.exec_driver_sql("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()").scalars().all()
+            if not set(tables_to_clear.split(", ")).issubset(tables):
+                raise RuntimeError("Test schema migrations are incomplete")
+            connection.exec_driver_sql("TRUNCATE " + ", ".join(f'"{self.schema}"."{name}"' for name in tables_to_clear.split(", ")))
         self.ids = {}
         with Session(self.engine) as db, db.begin():
             for name, role in (("student", "student"), ("other", "student"),
@@ -249,7 +257,6 @@ class DocumentTests(unittest.TestCase):
             (b"", "empty.pdf", "application/pdf", 422),
             (b"not a PDF", "fake.pdf", "application/pdf", 422),
             (b"%PDF-1.7\nbroken", "broken.pdf", "application/pdf", 422),
-            (pdf_bytes(text=False), "scan.pdf", "application/pdf", 422),
             (pdf_bytes(encrypted=True), "locked.pdf", "application/pdf", 422),
         ]:
             with self.subTest(filename=filename):
@@ -261,6 +268,15 @@ class DocumentTests(unittest.TestCase):
             self.assertEqual(self.upload(course).status_code, 413)
         with patch.object(self.settings, "document_max_size_bytes", len(self.pdf)):
             self.assertEqual(self.upload(course).status_code, 201)
+
+    def test_scan_is_accepted_and_queued_without_ocr_in_upload_request(self):
+        with patch("app.services.document_processing.open_ocr_engine") as ocr:
+            response = self.upload(self.course(), content=pdf_bytes(text=False), filename="scan.pdf")
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json()["status"], "queued")
+        ocr.assert_not_called()
+        with Session(self.engine) as db:
+            self.assertIsNotNone(db.get(DocumentProcessingJob, response.json()["id"]))
 
     def test_body_limit_checks_declared_and_chunked_uploads(self):
         course = self.course()

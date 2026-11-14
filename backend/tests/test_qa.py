@@ -43,11 +43,13 @@ class ProviderTests(unittest.TestCase):
         def handle(request):
             payload = json.loads(request.content)
             self.assertEqual(json.loads(payload["messages"][1]["content"])["sources"][0]["id"], str(chunk.id))
-            return httpx.Response(200, json={"finish_reason": "COMPLETE", "message": {"content": [
+            return httpx.Response(200, json={"usage": {"tokens": {"input_tokens": 3, "output_tokens": 2}}, "finish_reason": "COMPLETE", "message": {"content": [
                 {"type": "text", "text": json.dumps({"answer": "Có căn cứ", "source_ids": [str(chunk.id)]})},
             ]}})
         with httpx.Client(transport=httpx.MockTransport(handle)) as client:
-            self.assertEqual(generate_answer(client, "question", [chunk]), ("Có căn cứ", [str(chunk.id)]))
+            usage = {}
+            self.assertEqual(generate_answer(client, "question", [chunk], usage=usage), ("Có căn cứ", [str(chunk.id)]))
+            self.assertEqual(usage["total_tokens"], 5)
 
 
 class QATests(test_documents.DocumentTests):
@@ -110,7 +112,7 @@ class QATests(test_documents.DocumentTests):
 
     def test_deleted_document_during_generation_returns_no_answer(self):
         doc = self.ready()
-        def delete_source(client, question, chunks):
+        def delete_source(client, question, chunks, history=None, usage=None):
             self.client().delete(f"/api/v1/documents/{doc['id']}")
             return "Nội dung", [str(chunks[0].id)]
         with patch.object(self.settings, "cohere_api_key", SecretStr("test-only")), \

@@ -7,25 +7,103 @@ from uuid import UUID
 import httpx
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.auth import User
 from app.models.processing import DocumentChunk
 from app.models.quizzes import Quiz, QuizQuestion
+from app.models.courses import Classroom, ClassroomMember
+from app.models.documents import Document
 from app.schemas.quizzes import GeneratedQuiz, QuestionInput, QuizGenerateInput
-from app.services.documents import get_document
+from app.services.documents import get_document, visible_documents
+from app.services.ai_usage import reported_tokens, track_usage
+from app.services.courses import get_classroom
 
 logger = logging.getLogger(__name__)
 
 
-def get_quiz(db: Session, user: User, quiz_id: UUID, *, lock=False) -> Quiz:
+def visible_quizzes(user: User):
+    membership = exists().where(
+        Classroom.id == Quiz.classroom_id, Classroom.deleted_at.is_(None),
+        ClassroomMember.classroom_id == Classroom.id, ClassroomMember.student_id == user.id,
+        ClassroomMember.left_at.is_(None),
+    ).correlate(Quiz)
+    documents = visible_documents(user).with_only_columns(Document.id).correlate(None)
+    return select(Quiz).where(Quiz.document_id.in_(documents), or_(
+        Quiz.owner_id == user.id,
+        and_(user.role == "student", Quiz.status == "published", Quiz.classroom_id.is_not(None), membership),
+    )).correlate(None)
+
+
+def get_quiz(db: Session, user: User, quiz_id: UUID, *, lock=False, draft=False) -> Quiz:
     query = select(Quiz).where(Quiz.id == quiz_id, Quiz.owner_id == user.id)
     quiz = db.scalar(query.with_for_update() if lock else query)
     if quiz is None:
         raise HTTPException(404, "Không tìm thấy quiz.")
     get_document(db, user, quiz.document_id)
+    if draft and quiz.status != "draft":
+        raise HTTPException(409, "Quiz đã phát hành không thể sửa hoặc xóa. Hãy tạo bản sao nháp.")
+    return quiz
+
+
+def publish_quiz(db: Session, user: User, quiz_id: UUID) -> Quiz:
+    quiz = get_quiz(db, user, quiz_id, lock=True)
+    if quiz.status == "published":
+        return quiz
+    document = get_document(db, user, quiz.document_id)
+    if document.status != "ready":
+        raise HTTPException(409, "Tài liệu chưa sẵn sàng để phát hành quiz.")
+    if user.role == "teacher":
+        document = get_document(db, user, quiz.document_id, write=True)
+        if document.classroom_id is None or document.published_at is None:
+            raise HTTPException(409, "Cần công bố tài liệu lớp trước khi duyệt và giao quiz.")
+        get_classroom(db, user, document.classroom_id, write=True)
+    questions = list(db.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz.id)
+                               .order_by(QuizQuestion.position)))
+    if not questions or len(questions) > 10:
+        raise HTTPException(409, "Quiz cần có từ 1 đến 10 câu hỏi hợp lệ trước khi phát hành.")
+    try:
+        for question in questions:
+            QuestionInput.model_validate({
+                "question": question.question, "choices": question.choices,
+                "correct_index": question.correct_index, "explanation": question.explanation,
+                "topic": question.topic, "source_ids": [source["chunk_id"] for source in question.sources],
+            })
+        source_ids = {UUID(source["chunk_id"]) for question in questions for source in question.sources
+                      if UUID(source["document_id"]) == document.id}
+        if any(UUID(source["document_id"]) != document.id for question in questions for source in question.sources):
+            raise ValueError("Source outside document")
+        available = set(db.scalars(select(DocumentChunk.id).where(
+            DocumentChunk.document_id == document.id, DocumentChunk.id.in_(source_ids),
+        )))
+        if available != source_ids:
+            raise ValueError("Source no longer available")
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(409, "Câu hỏi hoặc nguồn không hợp lệ. Kiểm tra lại bản nháp trước khi phát hành.") from exc
+    quiz.status = "published"
+    quiz.published_at = datetime.now(timezone.utc)
+    if user.role == "teacher":
+        quiz.classroom_id = document.classroom_id
+        quiz.reviewed_by = user.id
+    db.flush()
+    return quiz
+
+
+def copy_quiz(db: Session, user: User, quiz_id: UUID) -> Quiz:
+    original = get_quiz(db, user, quiz_id, lock=True)
+    if original.status != "published":
+        raise HTTPException(409, "Chỉ tạo bản sao nháp từ quiz đã phát hành.")
+    quiz = Quiz(owner_id=user.id, document_id=original.document_id, title=original.title,
+                difficulty=original.difficulty, generation_model=original.generation_model,
+                copied_from_id=original.id)
+    db.add(quiz)
+    db.flush()
+    db.add_all([QuizQuestion(quiz_id=quiz.id, position=q.position, question=q.question, choices=q.choices,
+                            correct_index=q.correct_index, explanation=q.explanation, topic=q.topic, sources=q.sources)
+                for q in db.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == original.id))])
+    db.flush()
     return quiz
 
 
@@ -39,7 +117,7 @@ def question_values(data: QuestionInput, chunks: dict[UUID, DocumentChunk], docu
     ]}
 
 
-def generate_questions(client: httpx.Client, data: QuizGenerateInput, chunks: list[DocumentChunk]) -> GeneratedQuiz:
+def generate_questions(client: httpx.Client, data: QuizGenerateInput, chunks: list[DocumentChunk], usage: dict | None = None) -> GeneratedQuiz:
     settings = get_settings()
     if not settings.cohere_api_key.get_secret_value():
         raise HTTPException(503, "Chưa cấu hình COHERE_API_KEY để tạo quiz.")
@@ -96,6 +174,8 @@ def generate_questions(client: httpx.Client, data: QuizGenerateInput, chunks: li
     rejection = "invalid_response"
     try:
         result = response.json()
+        if usage is not None:
+            usage["total_tokens"] = reported_tokens(result)
         if result.get("finish_reason", "").upper() == "MAX_TOKENS":
             logger.warning("Quiz generation truncated: model=%s count=%s", settings.cohere_quiz_model,
                            data.question_count)
@@ -139,7 +219,9 @@ def create_quiz(db: Session, user: User, document_id: UUID, data: QuizGenerateIn
     chunks = list(db.scalars(select(DocumentChunk).where(DocumentChunk.id.in_(selected))
                             .order_by(DocumentChunk.position)))
     with httpx.Client(timeout=httpx.Timeout(get_settings().quiz_timeout_seconds, connect=10)) as client:
-        generated = generate_questions(client, data, chunks)
+        with track_usage(db, user.id, document_id, "cohere", get_settings().cohere_quiz_model,
+                         "quiz_generation", sum(len(chunk.content) for chunk in chunks), len(chunks)) as usage:
+            generated = generate_questions(client, data, chunks, usage=usage)
     document = get_document(db, user, document_id)
     if document.status != "ready" or set(db.scalars(select(DocumentChunk.id).where(
         DocumentChunk.document_id == document_id, DocumentChunk.id.in_(selected),
@@ -157,7 +239,7 @@ def create_quiz(db: Session, user: User, document_id: UUID, data: QuizGenerateIn
 
 
 def update_question(db: Session, user: User, quiz_id: UUID, question_id: UUID, data: QuestionInput):
-    quiz = get_quiz(db, user, quiz_id, lock=True)
+    quiz = get_quiz(db, user, quiz_id, lock=True, draft=True)
     question = db.scalar(select(QuizQuestion).where(QuizQuestion.id == question_id, QuizQuestion.quiz_id == quiz_id))
     if question is None:
         raise HTTPException(404, "Không tìm thấy câu hỏi.")

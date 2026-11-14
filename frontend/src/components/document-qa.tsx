@@ -33,10 +33,10 @@ export function DocumentQA({ documentId, preview }: { documentId: string; previe
     } catch (err) { setError(errorMessage(err)); }
     finally { setPending(false); }
   }
-  return <Card className="min-w-0"><CardContent className="space-y-4 pt-6">
+  return <Card className="@container min-w-0 rounded-2xl border py-0 shadow-none ring-0"><CardContent className="space-y-4 p-5 sm:p-6">
     <div><h2 className="text-lg font-semibold">Hỏi đáp theo tài liệu</h2><p className="mt-1 text-sm text-muted-foreground">Hội thoại được lưu riêng cho bạn. Hỏi tiếp trong cùng hội thoại để giữ ngữ cảnh.</p></div>
     <Feedback error={error} />
-    <div className="grid min-w-0 gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+    <div className="grid min-w-0 gap-5 @xl:grid-cols-[180px_minmax(0,1fr)]">
       <aside className="min-w-0 space-y-3" aria-label="Danh sách hội thoại">
         <Button onClick={create} disabled={pending} className="min-h-11 w-full">{pending ? <LoaderCircle className="animate-spin" /> : <Plus />}Hội thoại mới</Button>
         {listError ? <ErrorState message={listError} retry={reload} /> : !data ? <LoadingState /> : <>
@@ -45,7 +45,7 @@ export function DocumentQA({ documentId, preview }: { documentId: string; previe
           <Pagination page={page} hasNext={data.length > 20} onPage={setPage} />
         </>}
       </aside>
-      <section className="min-w-0 border-t pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-5" aria-label="Nội dung hội thoại">
+      <section className="min-w-0 border-t pt-4 @xl:border-t-0 @xl:border-l @xl:pt-0 @xl:pl-5" aria-label="Nội dung hội thoại">
         {selected ? <ConversationChat key={selected.id} conversation={selected} preview={preview} onRenamed={value => { setSelected(value); refresh(); }} onDeleted={() => { setSelected(undefined); refresh(); }} onSent={refresh} /> : <p className="py-8 text-sm text-muted-foreground">Chọn hội thoại hoặc tạo hội thoại mới để đặt câu hỏi về tài liệu.</p>}
       </section>
     </div>

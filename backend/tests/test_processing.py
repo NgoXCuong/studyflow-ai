@@ -2,12 +2,16 @@ import json
 import math
 import unittest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from io import BytesIO
+from unittest.mock import MagicMock, Mock, patch
 from uuid import UUID
 
 import httpx
+import pypdfium2 as pdfium
 from fastapi import HTTPException
+from PIL import Image, ImageDraw, ImageFont
 from pydantic import SecretStr
+from pypdf import PdfReader, PdfWriter
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -17,7 +21,106 @@ from app.models.documents import Document
 from app.models.processing import AIUsageLog, DocumentChunk, DocumentProcessingJob
 from app.services.document_cleanup import cleanup_documents
 from app.services.document_processing import claim_job, extract_chunks, finish_job, process_once, renew_claim
+from app.services.document_ocr import ocr_page, open_ocr_engine
 from app.services.embeddings import EmbeddingError, embed_batch
+
+
+def scanned_pdf():
+    output = BytesIO()
+    with Image.new("RGB", (1200, 1600), "white") as image:
+        ImageDraw.Draw(image).multiline_text((80, 120),
+            "StudyFlow supports learning from documents.\nPractice helps students review their knowledge.",
+            fill="black", font=ImageFont.load_default(size=36), spacing=25)
+        image.save(output, format="PDF", resolution=144)
+    return output.getvalue()
+
+
+class OCRTests(unittest.TestCase):
+    def test_text_pdf_uses_existing_extraction_without_loading_ocr(self):
+        with patch("app.services.document_processing.open_ocr_engine") as engine:
+            chunks, pages = extract_chunks(test_documents.pdf_bytes())
+        self.assertEqual((pages, len(chunks)), (1, 1))
+        self.assertIn("StudyFlow", chunks[0]["content"])
+        engine.assert_not_called()
+
+    def test_mixed_pdf_ocr_preserves_page_numbers_and_renews_lease(self):
+        writer = PdfWriter()
+        writer.add_page(PdfReader(BytesIO(test_documents.pdf_bytes())).pages[0])
+        writer.add_page(PdfReader(BytesIO(scanned_pdf())).pages[0])
+        writer.add_page(PdfReader(BytesIO(test_documents.pdf_bytes())).pages[0])
+        output = BytesIO()
+        writer.write(output)
+        heartbeat = Mock()
+        with patch("app.services.document_processing.open_ocr_engine", return_value=MagicMock()) as engine, \
+                patch("app.services.document_processing.ocr_page", return_value="Kiến thức từ bản scan.\x00\nÔn tập.") as recognize:
+            chunks, pages = extract_chunks(output.getvalue(), heartbeat=heartbeat)
+        self.assertEqual(pages, 3)
+        self.assertEqual([chunk["page_number"] for chunk in chunks], [1, 2, 3])
+        self.assertEqual(chunks[1]["content"], "Kiến thức từ bản scan. Ôn tập.")
+        self.assertEqual([chunk["position"] for chunk in chunks], [0, 1, 2])
+        self.assertEqual(recognize.call_args.args[1], 1)
+        engine.assert_called_once()
+        heartbeat.assert_called_once()
+
+    def test_empty_ocr_result_and_chunk_limit_are_reported(self):
+        with patch("app.services.document_processing.open_ocr_engine", return_value=MagicMock()), \
+                patch("app.services.document_processing.ocr_page", return_value=" \x00\n"):
+            with self.assertRaises(EmbeddingError) as raised:
+                extract_chunks(test_documents.pdf_bytes(text=False))
+        self.assertEqual(raised.exception.code, "empty_pdf")
+        with patch("app.services.document_processing.open_ocr_engine", return_value=MagicMock()), \
+                patch("app.services.document_processing.ocr_page", return_value="scan " * 1000), \
+                patch.object(get_settings(), "document_max_chunks", 1):
+            with self.assertRaises(EmbeddingError) as raised:
+                extract_chunks(test_documents.pdf_bytes(text=False))
+        self.assertEqual(raised.exception.code, "chunk_limit")
+
+    def test_missing_or_invalid_language_data_has_actionable_error(self):
+        with patch("app.services.document_ocr.Path.is_file", return_value=False):
+            with self.assertRaises(EmbeddingError) as raised:
+                open_ocr_engine()
+            self.assertEqual(raised.exception.code, "ocr_not_configured")
+        with patch("app.services.document_ocr.Path.is_file", return_value=True), \
+                patch("app.services.document_ocr.PyTessBaseAPI", side_effect=RuntimeError("private native detail")):
+            with self.assertRaises(EmbeddingError) as raised:
+                open_ocr_engine()
+        self.assertEqual(raised.exception.code, "ocr_not_configured")
+        self.assertNotIn("private", str(raised.exception))
+
+    def test_recognition_failure_clears_engine_and_hides_native_error(self):
+        for result, expected in [(False, "ocr_failed"), (RuntimeError("private native detail"), "ocr_failed")]:
+            engine = Mock()
+            if isinstance(result, Exception):
+                engine.Recognize.side_effect = result
+            else:
+                engine.Recognize.return_value = result
+            with pdfium.PdfDocument(test_documents.pdf_bytes(text=False)) as document:
+                with self.assertRaises(EmbeddingError) as raised:
+                    ocr_page(document, 0, engine)
+            self.assertEqual(raised.exception.code, expected)
+            self.assertNotIn("private", str(raised.exception))
+            engine.Clear.assert_called_once()
+            engine.Recognize.assert_called_once_with(timeout=get_settings().ocr_timeout_seconds * 1000)
+
+    def test_recognition_timeout_is_reported(self):
+        engine = Mock()
+        engine.Recognize.return_value = False
+        with pdfium.PdfDocument(test_documents.pdf_bytes(text=False)) as document, \
+                patch("app.services.document_ocr.time.monotonic", side_effect=[0, get_settings().ocr_timeout_seconds]):
+            with self.assertRaises(EmbeddingError) as raised:
+                ocr_page(document, 0, engine)
+        self.assertEqual(raised.exception.code, "ocr_timeout")
+        engine.Clear.assert_called_once()
+
+    def test_large_page_render_is_bounded(self):
+        page = MagicMock()
+        page.get_size.return_value = (20_000, 20_000)
+        engine = Mock()
+        engine.GetUTF8Text.return_value = "Text"
+        self.assertEqual(ocr_page([page], 0, engine), "Text")
+        scale = page.render.call_args.kwargs["scale"]
+        self.assertLessEqual((20_000 * scale) ** 2, 16_000_000)
+        page.close.assert_called_once()
 
 
 class EmbeddingTests(unittest.TestCase):
@@ -141,6 +244,34 @@ class ProcessingTests(test_documents.DocumentTests):
     def run_worker(self):
         with patch("app.services.document_processing.embed_batch", side_effect=self.embed):
             return process_once(self.engine)
+
+    def test_scan_pipeline_ready_with_original_page_sources(self):
+        document = self.upload(self.course(), content=scanned_pdf(), filename="scan.pdf").json()
+        with patch("app.services.document_processing.open_ocr_engine", return_value=MagicMock()), \
+                patch("app.services.document_processing.ocr_page", return_value="StudyFlow nhận dạng tài liệu scan."):
+            self.assertTrue(self.run_worker())
+        url = f"/api/v1/documents/{document['id']}"
+        status = self.client().get(url + "/processing").json()
+        self.assertEqual((status["status"], status["chunk_count"]), ("ready", 1))
+        chunks = self.client().get(url + "/chunks").json()
+        self.assertEqual(chunks[0]["page_number"], 1)
+        self.assertEqual(chunks[0]["content"], "StudyFlow nhận dạng tài liệu scan.")
+
+    def test_ocr_failure_has_no_partial_chunks_and_can_be_retried(self):
+        document = self.upload(self.course(), content=scanned_pdf()).json()
+        url = f"/api/v1/documents/{document['id']}"
+        with patch("app.services.document_processing.open_ocr_engine", side_effect=EmbeddingError("ocr_not_configured", "Thiếu dữ liệu OCR.")), \
+                patch("app.services.document_processing.embed_batch") as embed:
+            self.assertTrue(process_once(self.engine))
+        embed.assert_not_called()
+        failed = self.client().get(url + "/processing").json()
+        self.assertEqual((failed["status"], failed["error_code"], failed["chunk_count"]), ("failed", "ocr_not_configured", 0))
+        self.assertEqual(self.client("other").post(url + "/processing/retry").status_code, 403)
+        self.assertEqual(self.client().post(url + "/processing/retry").status_code, 202)
+        with patch("app.services.document_processing.open_ocr_engine", return_value=MagicMock()), \
+                patch("app.services.document_processing.ocr_page", return_value="Đã nhận dạng thành công."):
+            self.assertTrue(self.run_worker())
+        self.assertEqual(self.client().get(url + "/processing").json()["status"], "ready")
 
     def test_pipeline_ready_chunks_usage_and_no_duplicate_processing(self):
         document = self.upload(self.course(), content=test_documents.pdf_bytes(pages=2)).json()
@@ -302,6 +433,7 @@ class ProcessingTests(test_documents.DocumentTests):
 def load_tests(loader, tests, pattern):
     # Reuse the existing database fixture without running inherited M04 tests twice.
     return unittest.TestSuite([
+        loader.loadTestsFromTestCase(OCRTests),
         loader.loadTestsFromTestCase(EmbeddingTests),
         unittest.TestSuite(ProcessingTests(name) for name in loader.getTestCaseNames(ProcessingTests)
                            if name in ProcessingTests.__dict__),

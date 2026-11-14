@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { api, errorMessage } from "@/lib/api";
 import type { QuizQuestion } from "@/lib/quizzes";
 
-export function QuizQuestionEditor({ quizId, question, preview, onSaved }: {
-  quizId: string; question: QuizQuestion; preview: string; onSaved: () => void;
+export function QuizQuestionEditor({ quizId, question, preview, onSaved, readOnly = false }: {
+  quizId: string; question: QuizQuestion; preview: string; onSaved: () => void; readOnly?: boolean;
 }) {
   const id = useId();
   const [editing, setEditing] = useState(false);
@@ -37,7 +37,7 @@ export function QuizQuestionEditor({ quizId, question, preview, onSaved }: {
     finally { setPending(false); }
   }
   return <article className="min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><h4 className="font-semibold">Câu {question.position + 1}</h4>{!editing && <Button variant="outline" className="min-h-11" onClick={() => { setCorrect(String(question.correct_index)); setError(""); setEditing(true); }}><Pencil />Sửa câu hỏi</Button>}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h4 className="font-semibold">Câu {question.position + 1}</h4>{!editing && !readOnly && <Button variant="outline" className="min-h-11" onClick={() => { setCorrect(String(question.correct_index)); setError(""); setEditing(true); }}><Pencil />Sửa câu hỏi</Button>}</div>
     {editing ? <form onSubmit={save} className="space-y-4">
       <fieldset disabled={pending} className="grid min-w-0 gap-4">
         <div className="field"><Label htmlFor={`${id}-question`}>Nội dung câu hỏi</Label><Textarea id={`${id}-question`} name="question" defaultValue={question.question} required maxLength={2000} className="min-h-24" /></div>
